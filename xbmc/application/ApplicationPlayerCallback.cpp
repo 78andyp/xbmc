@@ -109,6 +109,13 @@ void CApplicationPlayerCallback::OnPlayerCloseFile(const CFileItem& file,
   CBookmark resumeBookmark;
   bool playCountUpdate = false;
   float percent = 0.0f;
+  int64_t totalTime{file.GetProperty("longest_stream_duration").asInteger()};
+  const std::string longestPath{file.GetProperty("longest_stream_path").asString()};
+
+  // If played through BD/DVD menu and stopped in menu then bookmark is for menu not the watched episode/movie
+  const bool inMenu{file.GetProperty("stopped_in_menu").asBoolean()};
+  const bool endedInMenu{inMenu && (file.GetProperty("longest_stream_duration").asDouble() /
+                                    1000.0) > bookmark.totalTimeInSeconds};
 
   // Make sure we don't reset existing bookmark etc. on eg. player start failure
   if (bookmark.timeInSeconds == 0.0)
@@ -125,6 +132,8 @@ void CApplicationPlayerCallback::OnPlayerCloseFile(const CFileItem& file,
       bookmark.totalTimeInSeconds = stackHelper->GetRegisteredStackTotalTimeMs(file) / 1000.0;
     bookmark.partNumber = stackHelper->GetRegisteredStackPartNumber(file);
   }
+  else
+    fileItem.SetDynPath(longestPath);
 
   percent = bookmark.timeInSeconds / bookmark.totalTimeInSeconds * 100;
 
@@ -134,15 +143,17 @@ void CApplicationPlayerCallback::OnPlayerCloseFile(const CFileItem& file,
   if ((MUSIC::IsAudio(fileItem) && advancedSettings->m_audioPlayCountMinimumPercent > 0 &&
        percent >= advancedSettings->m_audioPlayCountMinimumPercent) ||
       (VIDEO::IsVideo(fileItem) && advancedSettings->m_videoPlayCountMinimumPercent > 0 &&
-       percent >= advancedSettings->m_videoPlayCountMinimumPercent))
+       percent >= advancedSettings->m_videoPlayCountMinimumPercent) ||
+      (file.HasProperty("chapter_finished") && file.GetProperty("chapter_finished").asBoolean()))
   {
     playCountUpdate = true;
   }
 
-  if (advancedSettings->m_videoIgnorePercentAtEnd > 0 &&
-      bookmark.totalTimeInSeconds - bookmark.timeInSeconds <
-          0.01 * static_cast<double>(advancedSettings->m_videoIgnorePercentAtEnd) *
-              bookmark.totalTimeInSeconds)
+  if ((advancedSettings->m_videoIgnorePercentAtEnd > 0 &&
+       bookmark.totalTimeInSeconds - bookmark.timeInSeconds <
+           0.01 * static_cast<double>(advancedSettings->m_videoIgnorePercentAtEnd) *
+               bookmark.totalTimeInSeconds) ||
+      inMenu)
   {
     resumeBookmark.timeInSeconds = -1.0;
   }
@@ -160,6 +171,11 @@ void CApplicationPlayerCallback::OnPlayerCloseFile(const CFileItem& file,
   {
     resumeBookmark.timeInSeconds = 0.0;
   }
+  // If DVD chapter then update stream duration from entire title to chapter
+  if (fileItem.IsDVDChapter())
+    if (file.HasProperty("chapter_duration"))
+      fileItem.GetVideoInfoTag()->m_streamDetails.SetVideoDuration(
+          0, static_cast<int>(file.GetProperty("chapter_duration").asInteger()));
 
   if (CServiceBroker::GetSettingsComponent()
           ->GetProfileManager()

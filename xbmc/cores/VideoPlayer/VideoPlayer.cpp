@@ -699,6 +699,7 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
   m_error = false;
   m_bCloseRequest = false;
   m_renderManager.PreInit();
+  m_longestTime = 0;
 
   Create();
   m_messenger.Init();
@@ -2549,7 +2550,6 @@ void CVideoPlayer::OnExit()
     CLog::Log(LOGINFO, "VideoPlayer: eof, waiting for queues to empty");
 
   CFileItem fileItem(m_item);
-  UpdateFileItemStreamDetails(fileItem);
 
   CloseStream(m_CurrentAudio, !m_bAbortRequest);
   CloseStream(m_CurrentVideo, !m_bAbortRequest);
@@ -4300,6 +4300,8 @@ int CVideoPlayer::OnDiscNavResult(void* pData, int iMessage)
       {
         CLog::Log(LOGDEBUG, "DVDNAV_STOP");
         m_dvd.state = DVDSTATE_NORMAL;
+        if (pData && *static_cast<int*>(pData) > 0)
+          m_item.SetProperty("chapter_finished", true);
       }
       break;
     case DVDNAV_ERROR:
@@ -5007,6 +5009,48 @@ void CVideoPlayer::UpdatePlayState(double timeout)
 
   m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax);
 
+  // Save longest stream (for DVDs and Blurays played through menu)
+  if (state.timeMax > m_longestTime && m_content.m_videoIndex >= 0 && !IsInMenuInternal())
+  {
+    m_longestTime = state.timeMax;
+
+    // Use longest stream in case of Bluray/DVD menus
+    m_item.GetVideoInfoTag()->m_streamDetails.Reset();
+    UpdateFileItemStreamDetails(m_item, true);
+    m_item.SetProperty("longest_stream_duration", m_longestTime);
+
+    // Also generate dvd:// or bluray:// path for longest stream (in case playing from menu)
+    CURL url{m_item.GetDynPath()};
+    if (URIUtils::IsProtocol(m_item.GetDynPath(), "dvd"))
+    {
+      DVDState dvdState;
+      CDVDStateSerializer serializer;
+      if (serializer.XMLToDVDState(dvdState, state.player_state))
+        // If initial path included chapter then we should keep that
+        if (!m_item.IsDVDChapter())
+          url.SetFileName("/title/" + std::to_string(dvdState.title));
+    }
+    else if (URIUtils::IsProtocol(m_item.GetDynPath(), "bluray"))
+    {
+      BlurayState blurayState;
+      CBlurayStateSerializer serializer;
+      if (serializer.XMLToBlurayState(blurayState, state.player_state))
+        url.SetFileName(StringUtils::Format("BDMV/PLAYLIST/{:05}.mpls", blurayState.playlistId));
+    }
+    m_item.SetProperty("longest_stream_path", url.Get());
+  }
+  if (IsInMenuInternal())
+  {
+    m_item.SetProperty("stopped_in_menu", true);
+    m_item.SetProperty("has_been_in_menu", true);
+  }
+  else
+  {
+    if (!m_item.HasProperty("has_been_in_menu"))
+      m_item.SetProperty("has_been_in_menu", false);
+    m_item.SetProperty("stopped_in_menu", false);
+  }
+
   std::unique_lock<CCriticalSection> lock(m_StateSection);
   m_State = state;
 }
@@ -5192,9 +5236,10 @@ void CVideoPlayer::OnResetDisplay()
   m_VideoPlayerAudio->SendMessage(std::make_shared<CDVDMsg>(CDVDMsg::PLAYER_DISPLAY_RESET), 1);
 }
 
-void CVideoPlayer::UpdateFileItemStreamDetails(CFileItem& item)
+void CVideoPlayer::UpdateFileItemStreamDetails(CFileItem& item,
+                                               const bool alwaysUpdate /* = false */)
 {
-  if (!m_UpdateStreamDetails)
+  if (!m_UpdateStreamDetails && !alwaysUpdate)
     return;
   m_UpdateStreamDetails = false;
 

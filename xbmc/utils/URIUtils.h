@@ -87,6 +87,8 @@ public:
    */
   static std::string GetBasePath(const std::string& strPath);
 
+  static std::string GetBlurayPath(const std::string& path);
+
   /* \brief Change the base path of a URL: fromPath/fromFile -> toPath/toFile
     Handles changes in path separator and filename URL encoding if necessary to derive toFile.
     \param fromPath the base path of the original URL
@@ -135,6 +137,7 @@ public:
   static bool IsDAV(const std::string& strFile);
   static bool IsDOSPath(const std::string &path);
   static bool IsDVD(const std::string& strFile);
+  static bool IsDVDPlaylist(const std::string& strFile);
   static bool IsFTP(const std::string& strFile);
   static bool IsHTTP(const std::string& strFile, bool bTranslate = false);
   static bool IsUDP(const std::string& strFile);
@@ -179,6 +182,7 @@ public:
   static bool IsDiscImage(const std::string& file);
   static bool IsDiscImageStack(const std::string& file);
   static bool IsBluray(const std::string& strFile);
+  static bool IsBlurayPlaylist(const std::string& strFile);
   static bool IsAndroidApp(const std::string& strFile);
   static bool IsLibraryFolder(const std::string& strFile);
   static bool IsLibraryContent(const std::string& strFile);
