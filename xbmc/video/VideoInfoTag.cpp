@@ -1147,6 +1147,8 @@ void CVideoInfoTag::ParseNative(const TiXmlElement* movie, bool prioritise)
 
   if (XMLUtils::GetString(movie, "filenameandpath", value))
     SetFileNameAndPath(value);
+  else if (XMLUtils::GetString(movie, "file", value))
+    SetFile(value);
 
   if (XMLUtils::GetDate(movie, "premiered", m_premiered))
   {
