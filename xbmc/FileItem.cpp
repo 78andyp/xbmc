@@ -1360,7 +1360,7 @@ bool CFileItem::IsSamePath(const CFileItem *item) const
     if (item->HasProperty("item_start") || HasProperty("item_start"))
       return (item->GetProperty("item_start") == GetProperty("item_start"));
     // See if we have associated a bluray playlist
-    if (VIDEO::IsBlurayPlaylist(*this) || VIDEO::IsBlurayPlaylist(*item))
+    if (URIUtils::IsBlurayPath(GetDynPath()) || URIUtils::IsBlurayPath(item->GetDynPath()))
       return (GetDynPath() == item->GetDynPath());
     return true;
   }
