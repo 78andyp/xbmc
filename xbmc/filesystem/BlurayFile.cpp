@@ -21,6 +21,17 @@ namespace XFILE
 
   CBlurayFile::~CBlurayFile(void) = default;
 
+  std::string CBlurayFile::GetBasePath(const CURL& url)
+  {
+    if (!url.IsProtocol("bluray"))
+      return std::string{};
+
+    const CURL url2(url.GetHostName()); // strip bluray://
+    if (url2.IsProtocol("udf")) // ISO
+      return url2.GetHostName(); // strip udf://
+    return url2.Get(); // BDMV
+  }
+
   std::string CBlurayFile::TranslatePath(const CURL& url)
   {
     assert(url.IsProtocol("bluray"));
