@@ -64,6 +64,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -3550,22 +3551,63 @@ void CVideoDatabase::DeleteResumeBookMark(const CFileItem& item)
   }
 }
 
-void CVideoDatabase::GetEpisodesByFile(const std::string& strFilenameAndPath, std::vector<CVideoInfoTag>& episodes)
+void CVideoDatabase::GetEpisodesByFile(const std::string& strFilenameAndPath,
+                                       std::vector<CVideoInfoTag>& episodes)
 {
+  return GetEpisodesByFileId(GetFileId(strFilenameAndPath), episodes);
+}
+
+void CVideoDatabase::GetEpisodesByFileId(int idFile, std::vector<CVideoInfoTag>& episodes)
+{
+  if (idFile < 0)
+    return;
+
   try
   {
-    std::string strSQL = PrepareSQL("select * from episode_view where idFile=%i order by c%02d, c%02d asc", GetFileId(strFilenameAndPath), VIDEODB_ID_EPISODE_SORTSEASON, VIDEODB_ID_EPISODE_SORTEPISODE);
-    m_pDS->query(strSQL);
+    const int idShow{
+        GetSingleValueInt(PrepareSQL("SELECT idShow FROM episode WHERE idFile=%i", idFile), m_pDS)};
+
+    const std::string sql{PrepareSQL(
+        "select * from episode_view where idShow=%i order by idSeason, idEpisode", idShow)};
+    m_pDS->query(sql);
+
+    // Generate map of episodes in each file (finding base file for bluray://) of show
+    std::multimap<std::string, int> fileMap;
+    int index{1};
+    std::string episodeFile;
     while (!m_pDS->eof())
     {
-      episodes.emplace_back(GetDetailsForEpisode(m_pDS));
+      std::string file{URIUtils::AddFileToFolder(m_pDS->fv("strPath").get_asString(),
+                                                 m_pDS->fv("strFileName").get_asString())};
+      if (URIUtils::IsBlurayPath(file))
+        file = URIUtils::GetBlurayFile(file);
+      fileMap.insert({file, index});
+      if (episodeFile.empty() && m_pDS->fv("idFile").get_asInt() == idFile)
+        episodeFile = file;
       m_pDS->next();
+      index++;
+    }
+
+    // Remove episodes not from the base file/path
+    std::erase_if(fileMap,
+                  [episodeFile](const auto& it)
+                  {
+                    auto const& [file, index] = it;
+                    return file != episodeFile;
+                  });
+
+    // Get episode details
+    //for (const auto& [file, index] : fileMap)
+    for (int index : fileMap | std::views::values)
+    {
+      m_pDS->goto_rec(index);
+      episodes.emplace_back(GetDetailsForEpisode(m_pDS));
     }
     m_pDS->close();
   }
   catch (...)
   {
-    CLog::Log(LOGERROR, "{} ({}) failed", __FUNCTION__, strFilenameAndPath);
+    CLog::LogF(LOGERROR, "File Id {} failed", idFile);
   }
 }
 
