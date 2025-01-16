@@ -9,6 +9,7 @@
 #include "BlurayFile.h"
 
 #include "URL.h"
+#include "utils/URIUtils.h"
 
 #include <assert.h>
 
@@ -24,12 +25,6 @@ namespace XFILE
   std::string CBlurayFile::TranslatePath(const CURL& url)
   {
     assert(url.IsProtocol("bluray"));
-
-    std::string host = url.GetHostName();
-    const std::string& filename = url.GetFileName();
-    if (host.empty() || filename.empty())
-      return "";
-
-    return host.append(filename);
+    return URIUtils::GetDiscUnderlyingFile(url);
   }
 } /* namespace XFILE */

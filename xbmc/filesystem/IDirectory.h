@@ -41,6 +41,20 @@ enum DIR_FLAG
   DIR_FLAG_BYPASS_CACHE =
       (2 << 5) ///< Completely bypass the directory cache (no reading, no writing)
 };
+
+enum GET_TITLES_JOB
+{
+  GET_TITLES_ONE = 0,
+  GET_TITLES_MAIN = 1,
+  GET_TITLES_ALL = 2
+};
+enum SORT_TITLES_JOB
+{
+  SORT_TITLES_NONE = 0,
+  SORT_TITLES_EPISODE = 1,
+  SORT_TITLES_MOVIE = 2
+};
+
 /*!
  \ingroup filesystem
  \brief Interface to the directory on a file system.
