@@ -26,8 +26,8 @@
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "video/VideoDatabase.h"
 #include "video/VideoFileItemClassify.h"
-#include "video/VideoInfoTag.h"
 
 using namespace KODI;
 
@@ -50,46 +50,46 @@ protected:
   CFileItemList &m_items;
   XFILE::CDirectory::CHints m_hints;
 };
-}
+
+class CGetEpisodeDirectoryItems : public IRunnable
+{
+public:
+  CGetEpisodeDirectoryItems(const std::string& path, CFileItemList& items, const CFileItem& item)
+    : m_path(path), m_items(items), m_item(item)
+  {
+  }
+  void Run() override { m_result = XFILE::CDirectory::GetDirectory(m_path, m_items, m_item); }
+  bool m_result;
+
+protected:
+  std::string m_path;
+  CFileItemList& m_items;
+  CFileItem m_item;
+};
+} // namespace
 
 bool CGUIDialogSimpleMenu::ShowPlaySelection(CFileItem& item, bool forceSelection /* = false */)
 {
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_DISC_PLAYBACK) != BD_PLAYBACK_SIMPLE_MENU)
     return true;
 
-  if (forceSelection && VIDEO::IsBlurayPlaylist(item))
+  if (forceSelection && URIUtils::IsBlurayPath(item.GetDynPath()))
   {
     item.SetProperty("save_dyn_path", item.GetDynPath()); // save for screen refresh later
     item.SetDynPath(URIUtils::GetBlurayFile(item.GetDynPath()));
   }
 
-  if (VIDEO::IsBDFile(item))
+  const std::string directory{URIUtils::GenerateBlurayRootFile(item.GetDynPath())};
+  if (!directory.empty())
   {
-    std::string root = URIUtils::GetParentPath(item.GetDynPath());
-    URIUtils::RemoveSlashAtEnd(root);
-    if (URIUtils::GetFileName(root) == "BDMV")
-    {
-      CURL url("bluray://");
-      url.SetHostName(URIUtils::GetParentPath(root));
-      url.SetFileName("root");
-      return ShowPlaySelection(item, url.Get());
-    }
-  }
-
-  if (item.IsDiscImage())
-  {
-    CURL url2("udf://");
-    url2.SetHostName(item.GetDynPath());
-    url2.SetFileName("BDMV/index.bdmv");
-    if (CFileUtils::Exists(url2.Get()))
-    {
-      url2.SetFileName("");
-
-      CURL url("bluray://");
-      url.SetHostName(url2.Get());
-      url.SetFileName("root");
-      return ShowPlaySelection(item, url.Get());
-    }
+    if ((URIUtils::IsBlurayPath(directory) &&
+         (forceSelection ||
+          CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+              CSettings::SETTING_DISC_PLAYBACK) == BD_PLAYBACK_SIMPLE_MENU ||
+          CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+              CSettings::SETTING_DISC_PLAYBACK) == BD_PLAYBACK_MAIN_TITLE)))
+      // Show simple menu selection
+      return ShowPlaySelection(item, directory);
   }
   return true;
 }
@@ -99,18 +99,23 @@ bool CGUIDialogSimpleMenu::ShowPlaySelection(CFileItem& item, const std::string&
 
   CFileItemList items;
 
-  if (!GetDirectoryItems(directory, items, XFILE::CDirectory::CHints()))
+  if (item.GetVideoContentType() == VideoDbContentType::EPISODES)
+    // Try to show episodes instead of titles
+    GetEpisodeDirectoryItems(directory, items, item);
+
+  if (items.IsEmpty())
   {
-    CLog::Log(LOGERROR,
-              "CGUIWindowVideoBase::ShowPlaySelection - Failed to get play directory for {}",
-              directory);
-    return true;
+    // Not episode or new episode search failed, so do it the old way
+    if (!GetDirectoryItems(directory, items, XFILE::CDirectory::CHints()))
+    {
+      CLog::LogF(LOGERROR, "Failed to get play directory for {}", directory);
+      return true;
+    }
   }
 
   if (items.IsEmpty())
   {
-    CLog::Log(LOGERROR, "CGUIWindowVideoBase::ShowPlaySelection - Failed to get any items {}",
-              directory);
+    CLog::LogF(LOGERROR, "Failed to get any items {}", directory);
     return true;
   }
 
@@ -146,8 +151,7 @@ bool CGUIDialogSimpleMenu::ShowPlaySelection(CFileItem& item, const std::string&
     items.Clear();
     if (!GetDirectoryItems(item_new->GetDynPath(), items, XFILE::CDirectory::CHints()) || items.IsEmpty())
     {
-      CLog::Log(LOGERROR, "CGUIWindowVideoBase::ShowPlaySelection - Failed to get any items {}",
-                item_new->GetPath());
+      CLog::LogF(LOGERROR, "Failed to get any items {}", item_new->GetPath());
       break;
     }
   }
@@ -159,6 +163,18 @@ bool CGUIDialogSimpleMenu::GetDirectoryItems(const std::string &path, CFileItemL
                                              const XFILE::CDirectory::CHints &hints)
 {
   CGetDirectoryItems getItems(path, items, hints);
+  if (!CGUIDialogBusy::Wait(&getItems, 100, true))
+  {
+    return false;
+  }
+  return getItems.m_result;
+}
+
+bool CGUIDialogSimpleMenu::GetEpisodeDirectoryItems(const std::string& path,
+                                                    CFileItemList& items,
+                                                    const CFileItem& item)
+{
+  CGetEpisodeDirectoryItems getItems(path, items, item);
   if (!CGUIDialogBusy::Wait(&getItems, 100, true))
   {
     return false;

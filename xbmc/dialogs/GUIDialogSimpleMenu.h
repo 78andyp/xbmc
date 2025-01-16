@@ -24,5 +24,10 @@ public:
   static bool ShowPlaySelection(CFileItem& item, const std::string& directory);
 
 protected:
-  static bool GetDirectoryItems(const std::string &path, CFileItemList &items, const XFILE::CDirectory::CHints &hints);
+  static bool GetDirectoryItems(const std::string& path,
+                                CFileItemList& items,
+                                const XFILE::CDirectory::CHints& hints);
+  static bool GetEpisodeDirectoryItems(const std::string& path,
+                                       CFileItemList& items,
+                                       const CFileItem& item);
 };
