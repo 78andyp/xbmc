@@ -24,7 +24,6 @@
 #include "filesystem/VideoDatabaseDirectory/QueryParams.h"
 #include "games/GameUtils.h"
 #include "games/tags/GameInfoTag.h"
-#include "media/MediaLockState.h"
 #include "music/Album.h"
 #include "music/Artist.h"
 #include "music/MusicDatabase.h"
@@ -1308,7 +1307,9 @@ bool CFileItem::IsAlbum() const
   return m_bIsAlbum;
 }
 
-void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
+void CFileItem::UpdateInfo(const CFileItem& item,
+                           bool replaceLabels /* = true */,
+                           MultipleEpisodes replaceEpisodes /* = DONT_GROUP_MULTIPLE_EPISODES */)
 {
   if (item.HasVideoInfoTag())
   { // copy info across
@@ -1376,8 +1377,23 @@ void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
     SetInvalid();
   }
   SetDynPath(item.GetDynPath());
-  if (replaceLabels && !item.GetLabel().empty())
-    SetLabel(item.GetLabel());
+
+  // Alter label to episode number(s) if requested if (replaceLabels)
+  std::string label;
+  if (replaceLabels)
+  {
+    if (replaceEpisodes == MultipleEpisodes::GROUP_MULTIPLE_EPISODES &&
+        (item.IsDiscImage() || VIDEO::IsDVDFile(item) || item.IsBluray()) &&
+        item.GetVideoContentType() == VideoDbContentType::EPISODES)
+    {
+      label = GetEpisodesLabel(*this, item);
+    }
+    else if (!item.GetLabel().empty())
+      label = item.GetLabel();
+  }
+  if (!label.empty())
+    SetLabel(label);
+
   if (replaceLabels && !item.GetLabel2().empty())
     SetLabel2(item.GetLabel2());
   if (!item.GetArt().empty())
@@ -1387,6 +1403,37 @@ void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
   SetContentLookup(item.m_doContentLookup);
   SetMimeType(item.m_mimetype);
   UpdateMimeType(m_doContentLookup);
+}
+
+std::string CFileItem::GetEpisodesLabel(CFileItem& newItem, const CFileItem& item)
+{
+  std::string label;
+  const int startEpisode{static_cast<int>(item.GetProperty("episodes_start").asInteger(0))};
+  const int endEpisode{static_cast<int>(item.GetProperty("episodes_end").asInteger(0))};
+  const bool hasSpecials{item.GetProperty("episodes_has_specials").asBoolean()};
+
+  if (startEpisode > 0 && startEpisode == endEpisode)
+  {
+    label = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21351), startEpisode);
+  }
+  else if (startEpisode < endEpisode)
+  {
+    label =
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21352),
+                            startEpisode, endEpisode);
+    newItem.GetVideoInfoTag()->m_strPlot = item.GetProperty("episodes_show_plot").asString();
+  }
+
+  if (hasSpecials)
+  {
+    if (!label.empty())
+      label += CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21353);
+    else
+      label = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21354);
+  }
+
+  return label;
 }
 
 void CFileItem::MergeInfo(const CFileItem& item)

@@ -58,7 +58,6 @@
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
-#include "video/VideoDbUrl.h"
 #include "video/VideoFileItemClassify.h"
 #include "video/VideoInfoScanner.h"
 #include "video/VideoLibraryQueue.h"
@@ -71,6 +70,7 @@
 #include "view/GUIViewState.h"
 
 #include <memory>
+#include <ranges>
 
 using namespace XFILE;
 using namespace VIDEODATABASEDIRECTORY;
@@ -718,6 +718,53 @@ void CGUIWindowVideoBase::LoadVideoInfo(CFileItemList& items,
   if (!content.empty())
   {
     database.GetItemsForPath(content, items.GetPath(), dbItems);
+
+    // Determine episode ranges for multi-episode items sharing the same basePath (same file).
+    if (content == "episodes" && !dbItems.IsEmpty())
+    {
+      std::map<std::string, std::vector<int>> episodesByPath;
+      for (int i = 0; i < dbItems.Size(); i++)
+      {
+        const auto& dbItem = dbItems.Get(i);
+        if (dbItem->HasVideoInfoTag())
+          episodesByPath[dbItem->GetPath()].emplace_back(i);
+      }
+
+      for (const auto& episodes : episodesByPath | std::views::values)
+      {
+        if (episodes.size() < 2)
+          continue;
+
+        const auto& firstItem{dbItems.Get(episodes[0])};
+        bool hasSpecials{false};
+        int startEpisode{INT_MAX};
+        int endEpisode{-1};
+        for (int e : episodes)
+        {
+          const auto* tag{dbItems.Get(e)->GetVideoInfoTag()};
+          if (tag->m_iSeason == 0)
+          {
+            hasSpecials = true;
+            continue;
+          }
+          startEpisode = std::min(startEpisode, tag->m_iEpisode);
+          endEpisode = std::max(endEpisode, tag->m_iEpisode);
+        }
+
+        // Store on the first item (saved by SetFastLookup)
+        firstItem->SetProperty("episodes_start", startEpisode);
+        firstItem->SetProperty("episodes_end", endEpisode);
+        firstItem->SetProperty("episodes_has_specials", hasSpecials);
+
+        // Pre-fetch show plot for multi-episode range labels (as the individual episode plot is not relevant)
+        if (startEpisode < endEpisode)
+        {
+          const int idShow{firstItem->GetVideoInfoTag()->m_iIdShow};
+          firstItem->SetProperty("episodes_show_plot", database.GetPlotByShowId(idShow));
+        }
+      }
+    }
+
     dbItems.SetFastLookup(true);
   }
 
@@ -743,7 +790,7 @@ void CGUIWindowVideoBase::LoadVideoInfo(CFileItemList& items,
     }
     if (match)
     {
-      pItem->UpdateInfo(*match, replaceLabels);
+      pItem->UpdateInfo(*match, replaceLabels, MultipleEpisodes::GROUP_MULTIPLE_EPISODES);
 
       if (stackItems)
       {

@@ -519,7 +519,10 @@ bool CGUIWindowVideoNav::GetDirectory(const std::string &strDirectory, CFileItem
       if (items.GetLabel().empty() && m_rootDir.IsSource(items.GetPath(), CMediaSourceSettings::GetInstance().GetSources("video"), &label))
         items.SetLabel(label);
       if (!items.IsSourcesPath() && !items.IsLibraryFolder())
+      {
+        CLog::LogF(LOGDEBUG, "{}", items.GetPath());
         LoadVideoInfo(items, m_database);
+      }
     }
 
     CVideoDbUrl videoUrl;
