@@ -81,6 +81,12 @@ enum class FileFolderType
   MASK_ONBROWSE = ALWAYS | ONCLICK | ONBROWSE,
 };
 
+enum class MultipleEpisodes
+{
+  DONT_GROUP_MULTIPLE_EPISODES = 0,
+  GROUP_MULTIPLE_EPISODES
+};
+
 /* special startoffset used to indicate that we wish to resume */
 constexpr int STARTOFFSET_RESUME = -1;
 
@@ -481,8 +487,14 @@ public:
    in the given item.
    \param item the item used to supplement information
    \param replaceLabels whether to replace labels (defaults to true)
+   \param replaceEpisodes whether to list all episodes on multi-episode disc (defaults to not)
    */
-  void UpdateInfo(const CFileItem &item, bool replaceLabels = true);
+  void UpdateInfo(
+      const CFileItem& item,
+      bool replaceLabels = true,
+      MultipleEpisodes replaceEpisodes = MultipleEpisodes::DONT_GROUP_MULTIPLE_EPISODES);
+
+  std::string GetEpisodesLabel(CFileItem& newItem, const CFileItem& item);
 
   /*! \brief Merge an item with information from another item
   We take metadata/art information from the given item and supplement the current
@@ -537,6 +549,9 @@ public:
   void LoadEmbeddedCue();
   bool HasCueDocument() const;
   bool LoadTracksFromCueDocument(CFileItemList& scannedItems);
+
+  bool ContainsMultipleEpisodes() const { return m_multipleTitles; }
+  void SetContainsMultipleEpisodes(bool multipleTitles) { m_multipleTitles = multipleTitles; }
 
 private:
   /*! \brief Recalculate item's MIME type if it is not set or is set to "application/octet-stream".
@@ -595,6 +610,7 @@ private:
   bool m_bIsAlbum{false};
   int64_t m_lStartOffset{0};
   int64_t m_lEndOffset{0};
+  bool m_multipleTitles{ false };
 
   std::shared_ptr<CCueDocument> m_cueDocument;
 };

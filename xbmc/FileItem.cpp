@@ -24,7 +24,6 @@
 #include "filesystem/VideoDatabaseDirectory/QueryParams.h"
 #include "games/GameUtils.h"
 #include "games/tags/GameInfoTag.h"
-#include "media/MediaLockState.h"
 #include "music/Album.h"
 #include "music/Artist.h"
 #include "music/MusicDatabase.h"
@@ -495,6 +494,7 @@ CFileItem& CFileItem::operator=(const CFileItem& item)
   m_specialSort = item.m_specialSort;
   m_bIsAlbum = item.m_bIsAlbum;
   m_doContentLookup = item.m_doContentLookup;
+  m_multipleTitles = item.m_multipleTitles;
   return *this;
 }
 
@@ -1308,7 +1308,9 @@ bool CFileItem::IsAlbum() const
   return m_bIsAlbum;
 }
 
-void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
+void CFileItem::UpdateInfo(const CFileItem& item,
+                           bool replaceLabels /* = true */,
+                           MultipleEpisodes replaceEpisodes /* = DONT_GROUP_MULTIPLE_EPISODES */)
 {
   if (item.HasVideoInfoTag())
   { // copy info across
@@ -1376,8 +1378,24 @@ void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
     SetInvalid();
   }
   SetDynPath(item.GetDynPath());
-  if (replaceLabels && !item.GetLabel().empty())
-    SetLabel(item.GetLabel());
+
+  // Alter label to episode number(s) if requested if (replaceLabels)
+  std::string label;
+  if (replaceLabels)
+  {
+    if (replaceEpisodes == MultipleEpisodes::GROUP_MULTIPLE_EPISODES &&
+        (item.IsDiscImage() || VIDEO::IsDVDFile(item) || item.IsBluray()) &&
+        item.GetVideoContentType() == VideoDbContentType::EPISODES)
+    {
+      label = GetEpisodesLabel(*this, item);
+      m_multipleTitles = true;
+    }
+    else if (!item.GetLabel().empty())
+      label = item.GetLabel();
+  }
+  if (!label.empty())
+    SetLabel(label);
+
   if (replaceLabels && !item.GetLabel2().empty())
     SetLabel2(item.GetLabel2());
   if (!item.GetArt().empty())
@@ -1387,6 +1405,62 @@ void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
   SetContentLookup(item.m_doContentLookup);
   SetMimeType(item.m_mimetype);
   UpdateMimeType(m_doContentLookup);
+}
+
+std::string CFileItem::GetEpisodesLabel(CFileItem& newItem, const CFileItem& item)
+{
+  std::string label;
+
+  // Get episodes on disc
+  CVideoDatabase database;
+  if (!database.Open())
+  {
+    CLog::LogF(LOGERROR, "Failed to open video database");
+    return label;
+  }
+
+  std::vector<CVideoInfoTag> episodes;
+  database.GetEpisodesByFileId(item.GetVideoInfoTag()->m_iFileId, episodes);
+  if (!episodes.empty())
+  {
+    bool specials{false};
+    int startEpisode{INT_MAX};
+    int endEpisode{-1};
+    for (const auto& episode : episodes)
+    {
+      if (episode.m_iSeason > 0 && episode.m_iEpisode < startEpisode)
+        startEpisode = episode.m_iEpisode;
+      if (episode.m_iSeason > 0 && episode.m_iEpisode > endEpisode)
+        endEpisode = episode.m_iEpisode;
+      if (episode.m_iSeason == 0)
+        specials = true;
+    }
+
+    if (startEpisode == endEpisode && startEpisode != -1)
+      label = StringUtils::Format(
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21351) /* Episode n */,
+          startEpisode);
+    else if (startEpisode < endEpisode)
+    {
+      label = StringUtils::Format(
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21352) /* Episodes m-n*/,
+          startEpisode, endEpisode);
+
+      // Get description of plot as more generic for multiple episodes
+      newItem.GetVideoInfoTag()->m_strPlot =
+          database.GetPlotByShowId(item.GetVideoInfoTag()->m_iIdShow);
+    }
+
+    if (specials)
+    {
+      if (!label.empty())
+        label +=
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21353); // and Specials
+      else
+        label = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21354); // Specials
+    }
+  }
+  return label;
 }
 
 void CFileItem::MergeInfo(const CFileItem& item)

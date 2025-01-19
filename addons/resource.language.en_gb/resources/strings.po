@@ -14519,7 +14519,31 @@ msgctxt "#21350"
 msgid "Special"
 msgstr ""
 
-#empty strings from id 21351 to 21357
+#. Used to show Episodes in Video->Files (eg. Episodes n)
+#: xbmc/FileItem.cpp
+msgctxt "#21351"
+msgid "Episode {}"
+msgstr ""
+
+#. Used to show Episodes in Video->Files (eg. Episodes m-n)
+#: xbmc/FileItem.cpp
+msgctxt "#21352"
+msgid "Episodes {}-{}"
+msgstr ""
+
+#. Used to show Specials in Video->Files (eg. Episodes m-n and Specials)
+#: xbmc/FileItem.cpp
+msgctxt "#21353"
+msgid " and Specials"
+msgstr ""
+
+#. Used to show Specials in Video->Files (when there are no episodes) (eg. Specials)
+#: xbmc/FileItem.cpp
+msgctxt "#21354"
+msgid "Specials"
+msgstr ""
+
+#empty strings from id 21355 to 21357
 
 #: system/settings/settings.xml
 msgctxt "#21358"

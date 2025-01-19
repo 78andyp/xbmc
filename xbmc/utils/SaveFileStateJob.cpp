@@ -113,7 +113,7 @@ void CSaveFileState::DoWork(CFileItem& item,
 
         bool updateListing = false;
         // No resume & watched status for livetv
-        if (!item.IsLiveTV())
+        if (!item.IsLiveTV() && !item.ContainsMultipleEpisodes())
         {
           if (updatePlayCount)
           {
@@ -197,7 +197,7 @@ void CSaveFileState::DoWork(CFileItem& item,
         }
 
         if (item.HasVideoInfoTag() && item.GetVideoInfoTag()->HasStreamDetails() &&
-            !item.IsLiveTV())
+            !item.IsLiveTV() && !item.ContainsMultipleEpisodes())
         {
           CFileItem dbItem(item);
 
@@ -232,7 +232,7 @@ void CSaveFileState::DoWork(CFileItem& item,
                 return false; // No video db item to update
               if (URIUtils::IsBlurayPath(item.GetDynPath()) &&
                   !URIUtils::IsStack(tag->m_strFileNameAndPath) &&
-                  tag->m_strFileNameAndPath != item.GetDynPath())
+                  tag->m_strFileNameAndPath != item.GetDynPath() && !item.ContainsMultipleEpisodes())
                 return true; // Bluray path to update
               if (item.GetProperty("new_stack_path").asBoolean(false))
                 return true; // Stack path to update
