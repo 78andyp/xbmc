@@ -14,6 +14,7 @@
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
+#include "video/VideoDatabase.h"
 #include "video/VideoInfoTag.h"
 
 #include <iomanip>
@@ -31,7 +32,7 @@ void CDiscDirectoryHelper::GetEpisodeTitles(CURL url,
   std::vector<CVideoInfoTag> specialsOnDisc;
   bool isSpecial{false};
   unsigned int episodeOffset{0};
-  const bool allEpisodes{false};
+  const bool allEpisodes{episode.m_multipleTitles};
 
   for (unsigned int i = 0; i < episodesOnDisc.size(); ++i)
   {
@@ -616,4 +617,56 @@ std::string CDiscDirectoryHelper::HexToString(std::span<const uint8_t> buf, int 
   ss << std::hex << std::setw(count) << std::setfill('0');
   std::ranges::for_each(buf, [&](auto x) { ss << static_cast<int>(x); });
   return ss.str();
+}
+
+std::string CDiscDirectoryHelper::GetEpisodesLabel(CFileItem& newItem, const CFileItem& item)
+{
+  std::string label{};
+
+  // Get episodes on disc
+  CVideoDatabase database;
+  if (!database.Open())
+  {
+    CLog::LogF(LOGERROR, "Failed to open video database");
+    return label;
+  }
+
+  std::vector<CVideoInfoTag> episodes;
+  database.GetEpisodesByFileId(item.GetVideoInfoTag()->m_iFileId, episodes);
+  if (!episodes.empty())
+  {
+    bool specials{false};
+    int startEpisode{INT_MAX};
+    int endEpisode{-1};
+    for (const auto& episode : episodes)
+    {
+      if (episode.m_iSeason > 0 && episode.m_iEpisode < startEpisode)
+        startEpisode = episode.m_iEpisode;
+      if (episode.m_iSeason > 0 && episode.m_iEpisode > endEpisode)
+        endEpisode = episode.m_iEpisode;
+      if (episode.m_iSeason == 0)
+        specials = true;
+    }
+
+    if (startEpisode == endEpisode && startEpisode != -1)
+      label = StringUtils::Format(g_localizeStrings.Get(21348) /* Episode n */, startEpisode);
+    else if (startEpisode < endEpisode)
+    {
+      label = StringUtils::Format(g_localizeStrings.Get(21349) /* Episodes m-n*/, startEpisode,
+                                  endEpisode);
+
+      // Get description of plot as more generic for multiple episodes
+      newItem.GetVideoInfoTag()->m_strPlot =
+          database.GetPlotByShowId(item.GetVideoInfoTag()->m_iIdShow);
+    }
+
+    if (specials)
+    {
+      if (!label.empty())
+        label += g_localizeStrings.Get(21350); // and Specials
+      else
+        label = g_localizeStrings.Get(21351); // Specials
+    }
+  }
+  return label;
 }
