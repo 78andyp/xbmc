@@ -22,12 +22,10 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "threads/IRunnable.h"
-#include "utils/FileUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
-#include "video/VideoFileItemClassify.h"
 
 using namespace KODI;
 
