@@ -481,6 +481,15 @@ std::string URIUtils::GetDiscBasePath(const std::string& file)
   return base;
 }
 
+std::string URIUtils::GetDiscUnderlyingFile(const CURL& url)
+{
+  std::string host = url.GetHostName();
+  const std::string& filename = url.GetFileName();
+  if (host.empty() || filename.empty())
+    return std::string{};
+  return AddFileToFolder(host, filename);
+}
+
 std::string URIUtils::GetBlurayFile(const std::string& path)
 {
   if (IsBlurayPath(path))

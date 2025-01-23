@@ -100,6 +100,12 @@ public:
    */
   static std::string GetDiscBasePath(const std::string& file);
 
+  /*! \brief Given a bluray:// path, return the underlying file path (eg. smb://, udf:// etc..)
+   \param url CURL containing bluray:// path.
+   \return return the underlying file path.
+   */
+  static std::string GetDiscUnderlyingFile(const CURL& url);
+
   /*! \brief Given a bluray:// path, return the base .ISO or index.BDMV.
    \param path bluray:// path.
    \return the base .ISO or index.BDMV.
