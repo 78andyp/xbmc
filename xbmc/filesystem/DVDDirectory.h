@@ -8,21 +8,33 @@
 
 #pragma once
 
-#include "IFileDirectory.h"
+#include "IDirectory.h"
+#include "URL.h"
 
-namespace XFILE
-{
+using namespace XFILE;
 
 /*!
  \brief Abstracts a DVD virtual directory (dvd://) which in turn points to the actual physical drive
  */
-class CDVDDirectory : public IFileDirectory
+class CDVDDirectory : public IDirectory
 {
 public:
   CDVDDirectory() = default;
   ~CDVDDirectory() override = default;
-  bool GetDirectory(const CURL& url, CFileItemList& items) override { return false; };
-  bool ContainsFiles(const CURL& url) override { return false; }
-  bool Resolve(CFileItem& item) const override;
+  bool GetDirectory(const CURL& url, CFileItemList& items) override;
+
+private:
+  void GetRoot(CFileItemList& items) const;
+  void GetRoot(CFileItemList& items,
+               const CFileItem& episode,
+               const std::vector<CVideoInfoTag>& episodesOnDisc) const;
+  bool GetEpisodeDirectory(const CURL& url,
+                           const CFileItem& episode,
+                           CFileItemList& items,
+                           const std::vector<CVideoInfoTag>& episodesOnDisc) override;
+  void GetTitles(int job, CFileItemList& items, int sort) const;
+  std::shared_ptr<CFileItem> GetTitle(const PlaylistVectorEntry& title,
+                                      const std::string& label) const;
+
+  CURL m_url;
 };
-} // namespace XFILE
