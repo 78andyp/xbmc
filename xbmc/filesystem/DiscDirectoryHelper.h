@@ -17,6 +17,7 @@
 static constexpr unsigned int MIN_EPISODE_DURATION = 10 * 60; // 10 minutes
 static constexpr unsigned int MAX_EPISODE_DIFFERENCE = 30; // 30 seconds
 static constexpr unsigned int MIN_SPECIAL_DURATION = 5 * 60; // 5 minutes
+static constexpr unsigned int MAIN_TITLE_LENGTH_PERCENT = 70;
 
 class CFileItem;
 class CFileItemList;
