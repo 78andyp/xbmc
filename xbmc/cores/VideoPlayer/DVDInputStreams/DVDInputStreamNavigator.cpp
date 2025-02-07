@@ -1490,6 +1490,49 @@ VideoStreamInfo CDVDInputStreamNavigator::GetVideoStreamInfo()
   return info;
 }
 
+void CDVDInputStreamNavigator::GetPlaylistInfo(ClipMap& clips, PlaylistMap& playlists)
+{
+  CLog::LogF(LOGDEBUG, "*** Playlist information ***");
+
+  int32_t titles;
+  m_dll.dvdnav_get_number_of_titles(m_dvdnav, &titles);
+  for (int32_t i = 1; i <= titles; ++i)
+  {
+    // Save playlist
+    PlaylistInformation info;
+
+    uint64_t* times{};
+    uint64_t duration;
+    const uint32_t chapters{m_dll.dvdnav_describe_title_chapters(m_dvdnav, i, &times, &duration)};
+
+    // Save playlist duration
+    info.duration = static_cast<unsigned int>(duration / 90000);
+
+    // Add chapters to playlist
+    if (chapters > 0)
+    {
+      ClipInformation clipInfo;
+      std::string chapterStr;
+      for (uint32_t j = 0; j < chapters; ++j)
+      {
+        // Add chapter length to playlist
+        const unsigned int chapterDuration{static_cast<unsigned int>(times[j] / 90000)};
+        info.clips.emplace_back(chapterDuration);
+
+        chapterStr += StringUtils::Format("{},",chapterDuration);
+      }
+      if (!chapterStr.empty())
+        chapterStr.pop_back();  // Remove last ','
+
+      playlists[i] = info;
+
+      CLog::LogF(LOGDEBUG, "Playlist {}, Duration {}, Chapters at {} ", i, duration, chapterStr);
+    }
+  }
+
+  CLog::LogF(LOGDEBUG, "*** Playlist information End ***");
+}
+
 int dvd_inputstreamnavigator_cb_seek(void * p_stream, uint64_t i_pos)
 {
   CDVDInputStreamFile *lpstream = reinterpret_cast<CDVDInputStreamFile*>(p_stream);

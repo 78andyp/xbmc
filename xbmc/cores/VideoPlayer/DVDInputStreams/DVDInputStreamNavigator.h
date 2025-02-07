@@ -16,6 +16,7 @@
 #include "DVDStateSerializer.h"
 #include "DllDvdNav.h"
 #include "cores/MenuType.h"
+#include "filesystem/IDirectory.h"
 #include "utils/Geometry.h"
 
 #include <string>
@@ -125,6 +126,8 @@ public:
 
   CDVDInputStream::IPosTime* GetIPosTime() override { return this; }
   bool PosTime(int iTimeInMsec) override; //seek within current pg(c)
+
+  void GetPlaylistInfo(ClipMap& clips, PlaylistMap& playlists);
 
   std::string GetDVDTitleString();
 
