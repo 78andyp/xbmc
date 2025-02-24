@@ -17,14 +17,14 @@
 #include <gtest/gtest.h>
 
 using ::testing::Test;
-using ::testing::WithParamInterface;
 using ::testing::ValuesIn;
+using ::testing::WithParamInterface;
 
 struct TestFileData
 {
-  const char *file;
+  const char* file;
   bool use_folder;
-  const char *base;
+  const char* base;
 };
 
 struct TestNameData
@@ -135,7 +135,21 @@ const TestNameData BaseNames[] = {
     {"/home/user/movies/movie.iso", false, "movie"},
     {"/home/user/movies/movie/file.iso", true, "movie"},
     {"/home/user/movies/disc 1/movie.iso", false, "movie"},
-    {"/home/user/movies/movie/disc 1/file.iso", true, "movie"}};
+    {"/home/user/movies/movie/disc 1/file.iso", true, "movie"},
+    {"bluray://udf%3a%2f%2fsmb%253a%252f%252fsomepath%252fmovie.iso%2f/BDMV/PLAYLIST/00800.mpls",
+     false, "movie"},
+    {"bluray://udf%3a%2f%2fsmb%253a%252f%252fsomepath%252fDisc%201%252fmovie.iso%2f/BDMV/PLAYLIST/"
+     "00800.mpls",
+     false, "movie"},
+    {"bluray://"
+     "udf%3a%2f%2fsmb%253a%252f%252fsomepath%252fmovie%252fDisc%201%252fmovie_disc.iso%2f/BDMV/"
+     "PLAYLIST/00800.mpls",
+     true, "movie"},
+    {"bluray://smb%3a%2f%2fsomepath%2fmovie%2f/BDMV/PLAYLIST/00800.mpls", true, "movie"},
+    {"bluray://smb%3a%2f%2fsomepath%2fmovie%2fDisc%201%2f/BDMV/PLAYLIST/00800.mpls", true, "movie"},
+    {"zip://smb%3a%2f%2fsomepath%2fmovie.zip/BDMV/index.bdmv", false, "movie"},
+    {"zip://smb%3a%2f%2fsomepath%2fmovie%2fdisc%201%2fmovie_disc.zip/BDMV/index.bdmv", true,
+     "movie"}};
 
 TEST_P(TestFileItemMovieName, GetMovieName)
 {

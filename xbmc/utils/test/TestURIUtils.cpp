@@ -214,6 +214,9 @@ TEST_F(TestURIUtils, GetBasePath)
       "00800.mpls");
   EXPECT_STREQ(ref.c_str(), var.c_str());
 
+  var = URIUtils::GetBasePath("zip://smb%3a%2f%2fsomepath%2fpath%2fmovie.zip/BDMV/index.bdmv");
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
   ref = "smb://somepath/path/disc 1/";
 
   var = URIUtils::GetBasePath("smb://somepath/path/disc 1/movie.avi");
@@ -221,6 +224,9 @@ TEST_F(TestURIUtils, GetBasePath)
 
   var = URIUtils::GetBasePath(
       "bluray://smb%3a%2f%2fsomepath%2fpath%2fdisc%201%2f/BDMV/PLAYLIST/00800.mpls");
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  var = URIUtils::GetBasePath("zip://smb%3a%2f%2fsomepath%2fpath%2fdisc%201%2fmovie.zip/BDMV/index.bdmv");
   EXPECT_STREQ(ref.c_str(), var.c_str());
 }
 
@@ -1084,6 +1090,35 @@ TEST_F(TestURIUtils, CheckConsistencyBetweenFileNameUtilities)
     EXPECT_EQ("a:b", URIUtils::GetFileName("/hello/there/a:b"));
     EXPECT_EQ("a:b", CURL_FileName_URIUtils_Split("/hello/there/a:b"));
     EXPECT_EQ("a:b", URIUtils_Split("/hello/there/a:b"));
+  }
+  {
+    const std::string path{
+        "bluray://udf%3a%2f%2fsmb%253a%252f%252fsomepath%252fpath%252fmovie.iso%2f/BDMV/PLAYLIST/"
+        "00800.mpls"};
+
+    EXPECT_EQ("BDMV/PLAYLIST/00800.mpls", CURL(path).GetFileName());
+
+    EXPECT_EQ("00800.mpls", URIUtils::GetFileName(path));
+    EXPECT_EQ("00800.mpls", CURL_FileName_URIUtils_Split(path));
+    EXPECT_EQ("00800.mpls", URIUtils_Split(path));
+  }
+  {
+    const std::string path{"zip://smb%3a%2f%2fsomepath%2fpath%2fmovie.zip/movie.mkv"};
+
+    EXPECT_EQ("movie.mkv", CURL(path).GetFileName());
+
+    EXPECT_EQ("movie.mkv", URIUtils::GetFileName(path));
+    EXPECT_EQ("movie.mkv", CURL_FileName_URIUtils_Split(path));
+    EXPECT_EQ("movie.mkv", URIUtils_Split(path));
+  }
+  {
+    const std::string path{"rar://smb%3a%2f%2fsomepath%2fpath%2fmovie.zip/BDMV/index.bdmv"};
+
+    EXPECT_EQ("BDMV/index.bdmv", CURL(path).GetFileName());
+
+    EXPECT_EQ("index.bdmv", URIUtils::GetFileName(path));
+    EXPECT_EQ("index.bdmv", CURL_FileName_URIUtils_Split(path));
+    EXPECT_EQ("index.bdmv", URIUtils_Split(path));
   }
 }
 
