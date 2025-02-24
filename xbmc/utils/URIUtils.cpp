@@ -531,6 +531,15 @@ std::string URIUtils::GetBasePath(const std::string& strPath)
   if (IsStack(strPath))
     strCheck = CStackDirectory::GetFirstStackedFile(strPath);
 
+  // Check to see if protocol is VFS addon (eg. archive://, rar://) or zip://
+  CURL url(strPath);
+  if ((CServiceBroker::IsAddonInterfaceUp() &&
+       CServiceBroker::GetFileExtensionProvider().EncodedHostName(url.GetProtocol())) ||
+      IsArchive(url))
+  {
+    strCheck = url.GetHostName();
+  }
+
   std::string strDirectory = GetDirectory(strCheck);
 
   if (IsInRAR(strCheck))
