@@ -37,7 +37,10 @@ static const TestEntry TestData[] = {
   // multi-episode
   {"The Legend of Korra - S01E01-02 - Welcome to Republic City & A Leaf in the Wind.mkv", 1, { 1, 2 } },
   {"foo.S01E01E02.mkv", 1, {1,2} },
-  {"foo.S01E03E04E05.mkv", 1, {3,4,5} }
+  {"foo.S01E03E04E05.mkv", 1, {3,4,5} },
+  {"foo.E03-05.mkv", 1, {3, 4, 5} },
+  {"foo.S05E03-05.mkv", 5, {3,4,5} },
+  {"foo.S05E03-E05.mkv", 5, {3, 4, 5} }
 };
 
 class TestVideoInfoScanner : public Test,
