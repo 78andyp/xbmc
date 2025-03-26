@@ -186,7 +186,8 @@ class CBlurayDirectory : public IDirectory
 public:
   CBlurayDirectory();
   ~CBlurayDirectory() override;
-  bool GetDirectory(const CURL& url, CFileItemList& items) override;
+  bool GetDirectory(const CURL& url, CFileItemList &items) override;
+  bool Resolve(CFileItem& item) const override;
 
   bool InitializeBluray(const std::string &root);
   static std::string GetBasePath(const CURL& url);
