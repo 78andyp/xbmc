@@ -261,11 +261,14 @@ bool CAutorun::RunDisc(IDirectory* pDir,
             db.Close();
           }
 
+          if (options.forceSelection)
+            item->SetProperty("force_playlist_selection", true);
+
           CServiceBroker::GetPlaylistPlayer().ClearPlaylist(PLAYLIST::Id::TYPE_VIDEO);
           CServiceBroker::GetPlaylistPlayer().SetShuffle(PLAYLIST::Id::TYPE_VIDEO, false);
           CServiceBroker::GetPlaylistPlayer().Add(PLAYLIST::Id::TYPE_VIDEO, item);
           CServiceBroker::GetPlaylistPlayer().SetCurrentPlaylist(PLAYLIST::Id::TYPE_VIDEO);
-          CServiceBroker::GetPlaylistPlayer().Play(0, "", false, false, options.forceSelection);
+          CServiceBroker::GetPlaylistPlayer().Play(0, "", false, false);
           return true;
         }
 

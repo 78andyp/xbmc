@@ -136,12 +136,6 @@ public:
    */
   static std::string GetBlurayAllEpisodesPath(const std::string& path);
 
-  /*! \brief Given a path to an .ISO or index.BDMV, returns a bluray:// path to default playlist path.
-   \param path the ISO/index.BDMV path.
-   \return the bluray:// playlist path - BDMV/PLAYLIST
-   */
-  static std::string GetBlurayPlaylistPath(const std::string& path);
-
   /*! \brief Given a path to an .ISO or index.BDMV, returns a bluray:// path.
    \param path the ISO/index.BDMV path.
    \return the bluray:// path.

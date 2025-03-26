@@ -539,11 +539,6 @@ std::string URIUtils::GetBlurayAllEpisodesPath(const std::string& path)
   return AddFileToFolder(GetBlurayPath(path), "root", "episode", "all");
 }
 
-std::string URIUtils::GetBlurayPlaylistPath(const std::string& path)
-{
-  return AddFileToFolder(GetBlurayPath(path), "BDMV", "PLAYLIST", "");
-}
-
 std::string URIUtils::GetBlurayPath(const std::string& path)
 {
   if (IsBlurayPath(path))

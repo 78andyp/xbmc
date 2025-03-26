@@ -11396,7 +11396,6 @@ void CVideoDatabase::ExportToXML(const std::string &path, bool singleFile /* = t
               iFailCount++;
             }
           }
-          singlePath = URIUtils::GetDirectory(nfoFile);
         }
       }
       if (!singleFile)
@@ -11500,6 +11499,7 @@ void CVideoDatabase::ExportToXML(const std::string &path, bool singleFile /* = t
               iFailCount++;
             }
           }
+          singlePath = URIUtils::GetDirectory(nfoFile);
         }
       }
       if (!singleFile)
