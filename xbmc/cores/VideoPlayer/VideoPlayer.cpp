@@ -45,7 +45,6 @@
 #include "input/actions/ActionIDs.h"
 #include "interfaces/AnnouncementManager.h"
 #include "messaging/ApplicationMessenger.h"
-#include "network/NetworkFileItemClassify.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -53,7 +52,6 @@
 #include "utils/FontUtils.h"
 #include "utils/JobManager.h"
 #include "utils/LangCodeExpander.h"
-#include "utils/StreamDetails.h"
 #include "utils/StreamUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -1532,6 +1530,11 @@ void CVideoPlayer::Process()
         OpenDefaultStreams();
 
       UpdatePlayState(0);
+
+      // Save state of the current stream (for blurays)
+      CFileItem item;
+      UpdateFileItemStreamDetails(item, UpdateStreamDetails::ALWAYS_UPDATE);
+      m_pInputStream->SaveCurrentState(m_State, item.GetVideoInfoTag()->m_streamDetails);
     }
 
     // handle eventual seeks due to playspeed
@@ -2647,7 +2650,10 @@ void CVideoPlayer::OnExit()
     CLog::Log(LOGINFO, "VideoPlayer: eof, waiting for queues to empty");
 
   CFileItem fileItem(m_item);
-  UpdateFileItemStreamDetails(fileItem);
+  UpdateFileItemStreamDetails(fileItem, UpdateStreamDetails::UPDATE_IF_FLAGGED);
+
+  // If bluray being played then the last playlist (and current state) may be a menu and not the main title played
+  m_pInputStream->UpdateCurrentState(m_State, fileItem);
 
   CloseStream(m_CurrentAudio, !m_bAbortRequest);
   CloseStream(m_CurrentVideo, !m_bAbortRequest);
@@ -2725,7 +2731,7 @@ void CVideoPlayer::HandleMessages()
 
       IPlayerCallback *cb = &m_callback;
       CFileItem fileItem(m_item);
-      UpdateFileItemStreamDetails(fileItem);
+      UpdateFileItemStreamDetails(fileItem, UpdateStreamDetails::UPDATE_IF_FLAGGED);
       CVideoSettings vs = m_processInfo->GetVideoSettings();
       m_outboundEvents->Submit([=]() {
         cb->StoreVideoSettings(fileItem, vs);
@@ -5320,11 +5326,14 @@ void CVideoPlayer::OnResetDisplay()
   m_VideoPlayerAudio->SendMessage(std::make_shared<CDVDMsg>(CDVDMsg::PLAYER_DISPLAY_RESET), 1);
 }
 
-void CVideoPlayer::UpdateFileItemStreamDetails(CFileItem& item)
+void CVideoPlayer::UpdateFileItemStreamDetails(CFileItem& item, UpdateStreamDetails update)
 {
-  if (!m_UpdateStreamDetails)
-    return;
-  m_UpdateStreamDetails = false;
+  if (update == UpdateStreamDetails::UPDATE_IF_FLAGGED)
+  {
+    if (!m_UpdateStreamDetails)
+      return;
+    m_UpdateStreamDetails = false;
+  }
 
   CLog::Log(LOGDEBUG, "CVideoPlayer: updating file item stream details with available streams");
 

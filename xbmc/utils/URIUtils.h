@@ -141,6 +141,7 @@ public:
    \return the bluray:// playlist path - BDMV/PLAYLIST
    */
   static std::string GetBlurayPlaylistPath(const std::string& path);
+  static std::string GetBlurayPlaylistPath(const std::string& path, unsigned int playlist);
 
   /*! \brief Given a path to an .ISO or index.BDMV, returns a bluray:// path.
    \param path the ISO/index.BDMV path.

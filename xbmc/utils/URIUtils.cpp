@@ -544,6 +544,12 @@ std::string URIUtils::GetBlurayPlaylistPath(const std::string& path)
   return AddFileToFolder(GetBlurayPath(path), "BDMV", "PLAYLIST", "");
 }
 
+std::string URIUtils::GetBlurayPlaylistPath(const std::string& path, unsigned int playlist)
+{
+  return AddFileToFolder(GetBlurayPath(path), "BDMV", "PLAYLIST",
+                         StringUtils::Format("{:05}.mpls", playlist));
+}
+
 std::string URIUtils::GetBlurayPath(const std::string& path)
 {
   if (IsBlurayPath(path))
