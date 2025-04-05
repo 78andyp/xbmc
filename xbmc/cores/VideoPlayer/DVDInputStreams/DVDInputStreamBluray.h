@@ -10,6 +10,8 @@
 
 #include "BlurayStateSerializer.h"
 #include "DVDInputStream.h"
+#include "IVideoPlayer.h"
+#include "video/VideoInfoTag.h"
 
 #include <list>
 #include <memory>
@@ -136,6 +138,9 @@ public:
 
   void ProcessEvent();
 
+  void SaveCurrentState(const SPlayerState& state, const CStreamDetails& details) override;
+  void UpdateCurrentState(SPlayerState& state, CFileItem& item) override;
+
 protected:
   struct SPlane;
 
@@ -193,4 +198,20 @@ protected:
 
     /* used during bd_open_stream read block*/
     CCriticalSection m_readBlocksLock;
+
+    int m_currentPlaylist{-1};
+    std::chrono::steady_clock::time_point m_startWatchTime{};
+
+    struct PlaylistInformation
+    {
+      int playlist{-1};
+      bool mightBeMenu{false};
+      double duration{0};
+      double watchedTime{0};
+      CStreamDetails details;
+      SPlayerState state;
+    };
+    std::vector<PlaylistInformation> m_playedPlaylists;
+
+    CCriticalSection m_statesLock;
 };
