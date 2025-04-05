@@ -28,6 +28,7 @@
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
 #include "video/VideoFileItemClassify.h"
+#include "video/VideoInfoTag.h"
 
 #include <functional>
 #include <limits>
@@ -382,6 +383,9 @@ bool CDVDInputStreamBluray::Open()
     m_clip = nullptr;
   }
 
+  // For playlist/chapter watch time
+  m_startWatchTime = std::chrono::steady_clock::now();
+
   // Process any events that occurred during opening
   while (bd_get_event(m_bd, &m_event))
     ProcessEvent();
@@ -621,6 +625,142 @@ void CDVDInputStreamBluray::ProcessEvent() {
 
   /* event has been consumed */
   m_event.event = BD_EVENT_NONE;
+}
+
+void CDVDInputStreamBluray::SaveCurrentState(const SPlayerState& state, const CStreamDetails& details)
+{
+  std::unique_lock<CCriticalSection> lock(m_statesLock);
+
+  // Save stream (for DVDs and Blurays played through menu) and playlist information
+  BlurayState blurayState;
+  CBlurayStateSerializer serializer;
+  if (serializer.XMLToBlurayState(blurayState, state.player_state))
+  {
+    // Details for this playlist
+    const int playlist{blurayState.playlistId};
+    const std::chrono::steady_clock::time_point timeNow{std::chrono::steady_clock::now()};
+    const double watchedTime{std::chrono::duration<double>(timeNow - m_startWatchTime).count()}; // seconds
+
+    // See if updating last playlist entry
+    if (!m_playedPlaylists.empty() &&
+        m_playedPlaylists.back().playlist == playlist)
+    {
+      // Update last playlist entry
+      auto& lastPlaylist = m_playedPlaylists.back();
+      lastPlaylist.watchedTime += watchedTime; // seconds
+      lastPlaylist.details = details;
+      lastPlaylist.state = state;
+      CLog::LogF(LOGDEBUG, "Updated playlist {} - watched time {} seconds", playlist,
+                lastPlaylist.watchedTime);
+    }
+    else
+    {
+      // Update previous playlist with watched time
+      if (!m_playedPlaylists.empty())
+      {
+        auto& lastPlaylist = m_playedPlaylists.back();
+        lastPlaylist.watchedTime += watchedTime; // seconds
+        CLog::LogF(LOGDEBUG, "Updated playlist {} - watched time {} seconds", lastPlaylist.playlist,
+                   lastPlaylist.watchedTime);
+      }
+      // New playlist
+      const PlaylistInformation currentPlaylistInformation{
+          .playlist = playlist,
+          .mightBeMenu = m_isInMainMenu,
+          .duration = state.timeMax / 1000, // seconds
+          .watchedTime = 0,
+          .details = details,
+          .state = state};
+      m_playedPlaylists.emplace_back(currentPlaylistInformation);
+      CLog::LogF(LOGDEBUG,
+                 "Playing playlist {} - menu {}, duration {} seconds, watched time {} seconds",
+                 playlist, currentPlaylistInformation.mightBeMenu,
+                 currentPlaylistInformation.duration, currentPlaylistInformation.watchedTime);
+    }
+
+    // Reset watch timer for next playlist
+    m_startWatchTime = std::chrono::steady_clock::now();
+  }
+}
+
+void CDVDInputStreamBluray::UpdateCurrentState(SPlayerState& state, CFileItem& item)
+{
+  std::unique_lock<CCriticalSection> lock(m_statesLock);
+
+  // First add current state to the list of playlist states
+  SaveCurrentState(state, item.GetVideoInfoTag()->m_streamDetails);
+
+  // List playlists
+  for (const auto& playlist : m_playedPlaylists)
+    CLog::LogF(LOGDEBUG, "Playlist {} - menu {}, duration {} seconds, watched time {} seconds",
+               playlist.playlist, playlist.mightBeMenu, playlist.duration, playlist.watchedTime);
+
+  // With BD-J discs everything played through the menu is indistinguishable from the menu itself
+  // So either all playlists are tagged as mightBeMenu or there may be some pre-menu playlists that aren't
+  const auto& it{std::ranges::find_if(m_playedPlaylists,
+                                      [](const PlaylistInformation& p) { return p.mightBeMenu; })};
+  if (it != m_playedPlaylists.end())
+  {
+    // At least one playlist is menu
+    // Now see if any non-menu playlists after first menu playlist
+    const auto& it2{std::ranges::find_if(
+        it, m_playedPlaylists.end(), [](const PlaylistInformation& p) { return !p.mightBeMenu; })};
+
+    // At least one playlist after first menu is not a menu
+    // So remove all menu playlists, as the main item will not be tagged as menu
+    if (it2 != m_playedPlaylists.end())
+      std::erase_if(m_playedPlaylists, [](const PlaylistInformation& p) { return p.mightBeMenu; });
+
+    // Remove all non-menu playlists before the first menu playlist
+    if (it != m_playedPlaylists.begin())
+      m_playedPlaylists.erase(m_playedPlaylists.begin(), it);
+  }
+
+  // Now see if the last playlist is a menu and occurs more than once (ie. menu -> main item -> back to menu -> stopped)
+  // If so, remove that playlist
+  bool removedMenu{false};
+  if (!m_playedPlaylists.empty() && m_playedPlaylists.back().mightBeMenu)
+  {
+    const int playlist{m_playedPlaylists.back().playlist};
+    if (std::ranges::count_if(m_playedPlaylists, [playlist](const PlaylistInformation& p)
+                              { return p.playlist == playlist; }) > 1)
+    {
+      // Remove all menu playlists
+      std::erase_if(m_playedPlaylists,
+                    [playlist](const PlaylistInformation& p) { return p.playlist == playlist; });
+      removedMenu = true;
+    }
+  }
+
+  // If we only have one menu playlist at the end of the playlist list then assume main item never played
+  // (or it as a result of filtering the playlist list is now empty)
+  if (m_playedPlaylists.empty() ||
+      !removedMenu && m_playedPlaylists.back().mightBeMenu &&
+          std::ranges::count_if(m_playedPlaylists,
+                                [](const PlaylistInformation& p) { return p.mightBeMenu; }) == 1)
+  {
+    item.GetVideoInfoTag()->m_streamDetails.Reset();
+    item.SetDynPath("");
+    CLog::LogF(LOGDEBUG, "No main item playlist played");
+    return;
+  }
+
+  // Now remove all short playlists
+  static constexpr unsigned int MIN_PLAYLIST_DURATION{5 * 60}; // 5 minutes
+  if (m_playedPlaylists.size() > 1)
+      std::erase_if(m_playedPlaylists, [](const PlaylistInformation& p)
+                                          { return p.duration < MIN_PLAYLIST_DURATION; });
+
+  // Find the playlist that was played the longest (of those that remain)
+  const auto& it3{std::ranges::max_element(m_playedPlaylists, {}, [](const PlaylistInformation& i)
+                                           { return i.watchedTime; })};
+
+  item.GetVideoInfoTag()->m_streamDetails = it3->details;
+  const int playlist{it3->playlist};
+  item.GetVideoInfoTag()->m_iTrack = playlist;
+  const std::string path{item.GetDynPath()};
+  item.SetDynPath(URIUtils::GetBlurayPlaylistPath(path, playlist));
+  CLog::LogF(LOGDEBUG, "Main playlist {}", playlist);
 }
 
 int CDVDInputStreamBluray::Read(uint8_t* buf, int buf_size)
