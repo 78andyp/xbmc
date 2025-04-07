@@ -2522,7 +2522,7 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
     if (isSimpleMenuAllowed)
     {
       // Check if we must show the simplified bd menu.
-      if (!CGUIDialogSimpleMenu::ShowPlaylistSelection(item))
+      if (!CDiscDirectoryHelper::GetOrShowPlaylistSelection(item))
         return true;
 
       // Reset any resume state as new playlist chosen

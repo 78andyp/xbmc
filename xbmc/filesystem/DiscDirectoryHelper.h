@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "Directory.h"
+
 #include <chrono>
 #include <cstdint>
 #include <map>
@@ -149,15 +151,15 @@ class CDiscDirectoryHelper
   // For removing duplicates from a vector of CandidatePlaylistInformation
   struct CandidatePlaylistInformationNotDuplicate
   {
-    explicit CandidatePlaylistInformationNotDuplicate(std::set<int64_t>& seen) : m_seen(seen) {}
+    explicit CandidatePlaylistInformationNotDuplicate(std::set<int64_t>& seen) : m_seen(&seen) {}
 
     bool operator()(const CandidatePlaylistInformation& c) const noexcept
     {
-      return m_seen.insert(c.duration.count()).second;
+      return m_seen->insert(c.duration.count()).second;
     }
 
   private:
-    std::set<int64_t>& m_seen;
+    std::set<int64_t>* m_seen;
   };
 
 public:
@@ -197,6 +199,18 @@ public:
    */
   static void AddRootOptions(const CURL& url, CFileItemList& items, AddMenuOption addMenuOption);
 
+  /*!
+   * \brief Either shows simple menu to select playlist, chooses main feature (movie/episode) playlists or returns if disc menu will be used later.
+   * \param item FileItem containing details of desired movie/episode. This is updated with the selected playlist.
+   * \return true if a playlist was selected or if the disc menu will be used later, false if the user cancelled.
+   */
+  static bool GetOrShowPlaylistSelection(CFileItem& item);
+
+protected:
+  static bool GetDirectoryItems(const std::string& path,
+                                CFileItemList& items,
+                                const CDirectory::CHints& hints);
+
 private:
   void InitialisePlaylistSearch(int episodeIndex, const std::vector<CVideoInfoTag>& episodesOnDisc);
   bool IsValidSingleEpisodePlaylist(const PlaylistInfo& singleEpisodePlaylistInformation,
@@ -234,6 +248,8 @@ private:
                          int episodeIndex,
                          const std::vector<CVideoInfoTag>& episodesOnDisc,
                          const PlaylistMap& playlists) const;
+
+  static bool GetItems(CFileItemList& items, const std::string& directory);
 
   AllEpisodes m_allEpisodes{AllEpisodes::SINGLE};
   IsSpecial m_isSpecial{IsSpecial::EPISODE};
