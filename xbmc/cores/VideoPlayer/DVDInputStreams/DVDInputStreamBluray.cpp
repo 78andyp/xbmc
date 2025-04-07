@@ -17,7 +17,6 @@
 #include "filesystem/BlurayCallback.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/LocalizeStrings.h"
-#include "settings/DiscSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/Geometry.h"
@@ -332,11 +331,6 @@ bool CDVDInputStreamBluray::Open()
   {
     m_navmode = false;
     m_titleInfo = GetTitleFile(filename);
-  }
-  else if (mode == BD_PLAYBACK_MAIN_TITLE)
-  {
-    m_navmode = false;
-    m_titleInfo = GetTitleLongest();
   }
   else if (resumable && m_item.GetStartOffset() == STARTOFFSET_RESUME && m_item.IsResumable())
   {

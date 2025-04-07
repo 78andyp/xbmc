@@ -12,12 +12,11 @@
 #include "FileItem.h"
 #include "PlayListPlayer.h"
 #include "ServiceBroker.h"
-#include "ServiceManager.h"
 #include "Util.h"
 #include "cores/AudioEngine/Interfaces/AE.h"
 #include "cores/playercorefactory/PlayerCoreFactory.h"
-#include "dialogs/GUIDialogSimpleMenu.h"
 #include "filesystem/DirectoryFactory.h"
+#include "filesystem/DiscDirectoryHelper.h"
 #include "music/MusicFileItemClassify.h"
 #include "playlists/PlayList.h"
 #include "playlists/PlayListFileItemClassify.h"
@@ -26,7 +25,6 @@
 #include "settings/MediaSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "storage/MediaManager.h"
 #include "utils/DiscsUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
@@ -231,7 +229,7 @@ bool CApplicationPlay::GetPlaylistIfDisc()
 
     if (isSimpleMenuAllowed)
     {
-      if (!CGUIDialogSimpleMenu::ShowPlaylistSelection(m_item))
+      if (!CDiscDirectoryHelper::GetOrShowPlaylistSelection(m_item))
         return false;
 
       // Reset any resume state as new playlist chosen
