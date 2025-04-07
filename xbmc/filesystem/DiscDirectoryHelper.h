@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "Directory.h"
+
 #include <map>
 #include <string>
 #include <utility>
@@ -113,5 +115,20 @@ public:
    * \param addMenuOption Bluray disc has menu, so add Menu Option
    */
   static void AddRootOptions(const CURL& url, CFileItemList& items, AddMenuOption addMenuOption);
+
+  /*!
+   * \brief Either shows simple menu to select playlist, chooses main feature (movie/episode) playlists or returns if disc menu will be used later.
+   * \param item FileItem containing details of desired movie/episode. This is updated with the selected playlist.
+   * \return true if a playlist was selected or if the disc menu will be used later, false if the user cancelled.
+   */
+  static bool GetOrShowPlaylistSelection(CFileItem& item);
+
+protected:
+  static bool GetDirectoryItems(const std::string& path,
+                                CFileItemList& items,
+                                const CDirectory::CHints& hints);
+
+private:
+  static bool GetItems(CFileItemList& items, const std::string& directory);
 };
 } // namespace XFILE

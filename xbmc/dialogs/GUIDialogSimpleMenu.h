@@ -8,29 +8,16 @@
 
 #pragma once
 
-#include "filesystem/Directory.h"
-#include "playlists/PlayListTypes.h"
+#include "video/VideoDatabase.h"
 
-#include <string>
-
-class CFileItem;
 class CFileItemList;
 
 class CGUIDialogSimpleMenu
 {
 public:
-
   /*! \brief Show dialog allowing selection of wanted playback item */
-  static bool GetOrShowPlaylistSelection(
-      CFileItem& item,
-      KODI::PLAYLIST::ExcludeUsedPlaylists excludeUsedPlaylists =
-          KODI::PLAYLIST::ExcludeUsedPlaylists::EXCLUDE_USED_PLAYLISTS);
-
-protected:
-  static bool GetDirectoryItems(const std::string& path,
-                                CFileItemList& items,
-                                const XFILE::CDirectory::CHints& hints);
-
-private:
-  static bool GetItems(const CFileItem& item, CFileItemList& items, const std::string& directory);
+  static bool ShowPlaylistSelection(const CFileItem& item,
+                                    CFileItem& selectedItem,
+                                    const CFileItemList& items,
+                                    const std::vector<CVideoDatabase::PlaylistInfo>& usedPlaylists);
 };
