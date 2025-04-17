@@ -798,6 +798,7 @@ msgstr ""
 #: xbmc/dialogs/GUIDialogMediaFilter.cpp
 #: xbmc/playlists/SmartPlaylist.cpp
 #: xbmc/pvr/windows/GUIViewStatePVR.cpp
+#: xbmc/dialogs/GUIDialogSimpleMenu.cpp
 #: addons/skin.estuary/xml/Variables.xml
 #: addons/skin.estuary/xml/View_51_Poster.xml
 #: addons/skin.estuary/xml/DialogPVRInfo.xml
@@ -837,6 +838,7 @@ msgstr ""
 #: xbmc/dialogs/GUIDialogSelect.cpp
 #: xbmc/games/controllers/windows/GUIControllerWindow.cpp
 #: xbmc/settings/dialogs/GUIDialogLibExportSettings.cpp
+#: xbmc/video/dialogs/GUIDialogVideoPlaylists.cpp
 msgctxt "#186"
 msgid "OK"
 msgstr ""
@@ -1623,6 +1625,7 @@ msgctxt "#334"
 msgid "Clean library..."
 msgstr ""
 
+#: xbmc/dialogs/GUIDialogSimpleMenu.cpp
 msgctxt "#335"
 msgid "Start"
 msgstr ""
@@ -15167,7 +15170,12 @@ msgctxt "#21485"
 msgid "Supported file extensions and media types"
 msgstr ""
 
-#empty strings from id 21486 to 21601
+#: xbmc/video/dialogs/GUIDialogVideoPlaylists.cpp
+msgctxt "#21486"
+msgid "Chapters"
+msgstr ""
+
+#empty strings from id 21487 to 21601
 
 #: xbmc/Util.cpp
 msgctxt "#21602"

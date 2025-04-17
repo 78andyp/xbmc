@@ -41,6 +41,13 @@ struct SActorInfo
   int order{-1};
 };
 
+struct ChapterInfo
+{
+  unsigned int chapter{0};
+  std::chrono::milliseconds start{0};
+  std::chrono::milliseconds duration{0};
+};
+
 class CRating
 {
 public:
@@ -379,6 +386,24 @@ public:
    */
   virtual bool SetResumePoint(double timeInSeconds, double totalTimeInSeconds, const std::string &playerState);
 
+  /*!
+   * @brief Set the video (bluray playlist) chapter information.
+   * @param chapters array of ChapterInfo containing information about the chapter timing.
+   */
+  void SetChapters(const std::vector<ChapterInfo>& chapters);
+
+  /*!
+   * @brief Set if the video (bluray playlist) has chapters.
+   * @return chapters array of ChapterInfo containing information about the chapter timing.
+   */
+  std::vector<ChapterInfo>& GetChapters();
+
+  /*!
+   * @brief Indicate if the video (bluray playlist) has chapters.
+   * @return true if the bluray playlist has chapters, false otherwise.
+   */
+  bool HasChapters() const;
+
   const std::string& GetOriginalLanguage() const { return m_originalLanguage; }
 
   std::string m_basePath; // the base path of the video, for folder-based lookups
@@ -439,6 +464,7 @@ public:
   int m_relevance; // Used for actors' number of appearances
   int m_parsedDetails;
   std::vector<EmbeddedArtInfo> m_coverArt; ///< art information
+  std::vector<ChapterInfo> m_chapters;
 
   // TODO: cannot be private, because of 'struct SDbTableOffsets'
   unsigned int m_duration; ///< duration in seconds

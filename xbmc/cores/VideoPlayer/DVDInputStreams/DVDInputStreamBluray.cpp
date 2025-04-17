@@ -10,6 +10,7 @@
 
 #include "DVDCodecs/Overlay/DVDOverlay.h"
 #include "DVDCodecs/Overlay/DVDOverlayImage.h"
+#include "Edl.h"
 #include "IVideoPlayer.h"
 #include "LangInfo.h"
 #include "ServiceBroker.h"
@@ -20,6 +21,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/Geometry.h"
 #include "utils/LangCodeExpander.h"
+#include "utils/RegExp.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XTimeUtils.h"
@@ -147,20 +149,38 @@ bool CDVDInputStreamBluray::Open()
   bool openDisc = false;
   bool resumable = true;
 
+  unsigned int startChapter{0};
+  unsigned int endChapter{0};
+
   // The item was selected via the simple menu
   if (URIUtils::IsProtocol(strPath, "bluray"))
   {
-    CURL url(strPath);
+    const CURL url(strPath);
     root = url.GetHostName();
     filename = URIUtils::GetFileName(url.GetFileName());
 
     // Check whether disc is AACS protected
-    CURL url2(root);
-    CFileItem item(url2, false);
-    openDisc = VIDEO::IsProtectedBlurayDisc(item);
+    const CURL url2(root);
+    CFileItem base(url2, false);
+    openDisc = VIDEO::IsProtectedBlurayDisc(base);
 
-    // check for a menu call for an image file
-    if (StringUtils::EqualsNoCase(filename, "menu") &&
+    // See if we want to start at or play specific chapter(s)
+    CRegExp c{true, CRegExp::autoUtf8,
+        R"((?:\/)(\d{5}\.mpls)(?:(?:(?:\/chapter\/)(\d{1,3}))|(?:(?:\/chapters\/)(\d{1,3})(?:-)(\d{1,3})))$)"};
+    if (c.RegFind(url.GetFileName()) != -1)
+    {
+      filename = c.GetMatch(1);
+      if (c.GetSubCount() == 2) // /chapter/n
+      {
+        startChapter = static_cast<unsigned int>(std::stoi(c.GetMatch(2)));
+      }
+      else if (c.GetSubCount() == 4) // /chapters/m-n
+      {
+        startChapter = static_cast<unsigned int>(std::stoi(c.GetMatch(3)));
+        endChapter = static_cast<unsigned int>(std::stoi(c.GetMatch(4)));
+      }
+    }
+    else if (StringUtils::EqualsNoCase(filename, "menu") &&
         !(m_item.GetStartOffset() == STARTOFFSET_RESUME && m_item.IsResumable()))
     {
       resumable = false;
@@ -168,13 +188,13 @@ bool CDVDInputStreamBluray::Open()
       // Remove udf:// if present
       if (url2.IsProtocol("udf"))
       {
-        item.SetPath(url2.GetHostName());
-        openDisc = VIDEO::IsProtectedBlurayDisc(item);
+        base.SetPath(url2.GetHostName());
+        openDisc = VIDEO::IsProtectedBlurayDisc(base);
       }
 
-      if (item.IsDiscImage())
+      if (base.IsDiscImage())
       {
-        if (!OpenStream(item))
+        if (!OpenStream(base))
           return false;
 
         openStream = true;
@@ -328,6 +348,34 @@ bool CDVDInputStreamBluray::Open()
   {
     m_navmode = false;
     m_titleInfo = GetTitleFile(filename);
+    
+    if (startChapter > 0)
+    {
+      CEdl edl;
+      EDL::Edit edit;
+
+      // Before start chapter
+      if (startChapter > 1 && m_titleInfo->chapter_count >= startChapter)
+      {
+        edit.start = 0ms;
+        edit.end = std::chrono::milliseconds(m_titleInfo->chapters[startChapter - 1].start / 90);
+        edit.action = EDL::Action::CUT;
+        edl.AddEdit(edit);
+      }
+
+      // After end chapter
+      if (endChapter > startChapter && m_titleInfo->chapter_count >= endChapter)
+      {
+        edit.start = std::chrono::milliseconds((m_titleInfo->chapters[endChapter - 1].start +
+                                                m_titleInfo->chapters[endChapter - 1].duration) /
+                                               90);
+        edit.end = std::chrono::milliseconds(GetTotalTime());
+        edit.action = EDL::Action::CUT;
+        edl.AddEdit(edit);
+      }
+
+      m_player->UpdateEdl(edl);
+    }
   }
   else if (resumable && m_item.GetStartOffset() == STARTOFFSET_RESUME && m_item.IsResumable())
   {
@@ -628,6 +676,146 @@ void CDVDInputStreamBluray::ProcessEvent() {
 
   /* event has been consumed */
   m_event.event = BD_EVENT_NONE;
+}
+
+void CDVDInputStreamBluray::SaveCurrentState(const SPlayerState& state, const CStreamDetails& details)
+{
+  std::unique_lock<CCriticalSection> lock(m_statesLock);
+
+  // Save stream (for DVDs and Blurays played through menu) and playlist information
+  BlurayState blurayState;
+  CBlurayStateSerializer serializer;
+  if (serializer.XMLToBlurayState(blurayState, state.player_state))
+  {
+    // Details for this playlist
+    const int playlist{blurayState.playlistId};
+    const std::chrono::steady_clock::time_point timeNow{std::chrono::steady_clock::now()};
+    const double watchedTime{std::chrono::duration<double>(timeNow - m_startWatchTime).count()}; // seconds
+
+    // See if updating last playlist entry
+    if (!m_playedPlaylists.empty() &&
+        m_playedPlaylists.back().playlist == playlist)
+    {
+      // Update last playlist entry
+      auto& lastPlaylist = m_playedPlaylists.back();
+      lastPlaylist.watchedTime += watchedTime; // seconds
+      lastPlaylist.details = details;
+      lastPlaylist.state = state;
+      CLog::LogF(LOGDEBUG, "Updated playlist {} - watched time {} seconds", playlist,
+                lastPlaylist.watchedTime);
+    }
+    else
+    {
+      // Update previous playlist with watched time
+      if (!m_playedPlaylists.empty())
+      {
+        auto& lastPlaylist = m_playedPlaylists.back();
+        lastPlaylist.watchedTime += watchedTime; // seconds
+        CLog::LogF(LOGDEBUG, "Updated playlist {} - watched time {} seconds", lastPlaylist.playlist,
+                   lastPlaylist.watchedTime);
+      }
+      // New playlist
+      const PlaylistInformation currentPlaylistInformation{
+          .playlist = playlist,
+          .mightBeMenu = m_isInMainMenu,
+          .duration = state.timeMax / 1000, // seconds
+          .watchedTime = 0,
+          .details = details,
+          .state = state};
+      m_playedPlaylists.emplace_back(currentPlaylistInformation);
+      CLog::LogF(LOGDEBUG,
+                 "Playing playlist {} - menu {}, duration {} seconds, watched time {} seconds",
+                 playlist, currentPlaylistInformation.mightBeMenu,
+                 currentPlaylistInformation.duration, currentPlaylistInformation.watchedTime);
+    }
+
+    // Reset watch timer for next playlist
+    m_startWatchTime = std::chrono::steady_clock::now();
+  }
+}
+
+void CDVDInputStreamBluray::UpdateCurrentState(SPlayerState& state, CFileItem& item)
+{
+  std::unique_lock<CCriticalSection> lock(m_statesLock);
+
+  if (URIUtils::IsBlurayPath(item.GetDynPath()) &&
+      !StringUtils::EqualsNoCase(URIUtils::GetFileName(item.GetDynPath()), "menu"))
+    return;
+
+  // First add current state to the list of playlist states
+  SaveCurrentState(state, item.GetVideoInfoTag()->m_streamDetails);
+
+  // List playlists
+  for (const auto& playlist : m_playedPlaylists)
+    CLog::LogF(LOGDEBUG, "Playlist {} - menu {}, duration {} seconds, watched time {} seconds",
+               playlist.playlist, playlist.mightBeMenu, playlist.duration, playlist.watchedTime);
+
+  // With BD-J discs everything played through the menu is indistinguishable from the menu itself
+  // So either all playlists are tagged as mightBeMenu or there may be some pre-menu playlists that aren't
+  const auto& it{std::ranges::find_if(m_playedPlaylists,
+                                      [](const PlaylistInformation& p) { return p.mightBeMenu; })};
+  if (it != m_playedPlaylists.end())
+  {
+    // At least one playlist is menu
+    // Now see if any non-menu playlists after first menu playlist
+    const auto& it2{std::ranges::find_if(
+        it, m_playedPlaylists.end(), [](const PlaylistInformation& p) { return !p.mightBeMenu; })};
+
+    // At least one playlist after first menu is not a menu
+    // So remove all menu playlists, as the main item will not be tagged as menu
+    if (it2 != m_playedPlaylists.end())
+      std::erase_if(m_playedPlaylists, [](const PlaylistInformation& p) { return p.mightBeMenu; });
+
+    // Remove all non-menu playlists before the first menu playlist
+    if (it != m_playedPlaylists.begin())
+      m_playedPlaylists.erase(m_playedPlaylists.begin(), it);
+  }
+
+  // Now see if the last playlist is a menu and occurs more than once (ie. menu -> main item -> back to menu -> stopped)
+  // If so, remove that playlist
+  bool removedMenu{false};
+  if (!m_playedPlaylists.empty() && m_playedPlaylists.back().mightBeMenu)
+  {
+    const int playlist{m_playedPlaylists.back().playlist};
+    if (std::ranges::count_if(m_playedPlaylists, [playlist](const PlaylistInformation& p)
+                              { return p.playlist == playlist; }) > 1)
+    {
+      // Remove all menu playlists
+      std::erase_if(m_playedPlaylists,
+                    [playlist](const PlaylistInformation& p) { return p.playlist == playlist; });
+      removedMenu = true;
+    }
+  }
+
+  // If we only have one menu playlist at the end of the playlist list then assume main item never played
+  // (or it as a result of filtering the playlist list is now empty)
+  if (m_playedPlaylists.empty() ||
+      !removedMenu && m_playedPlaylists.back().mightBeMenu &&
+          std::ranges::count_if(m_playedPlaylists,
+                                [](const PlaylistInformation& p) { return p.mightBeMenu; }) == 1)
+  {
+    item.GetVideoInfoTag()->m_streamDetails.Reset();
+    item.SetDynPath("");
+    CLog::LogF(LOGDEBUG, "No main item playlist played");
+    return;
+  }
+
+  // Now remove all short playlists
+  static constexpr unsigned int MIN_PLAYLIST_DURATION{5 * 60 * 1000}; // 5 minutes
+  if (m_playedPlaylists.size() > 1)
+      std::erase_if(m_playedPlaylists, [](const PlaylistInformation& p)
+                                          { return p.duration < MIN_PLAYLIST_DURATION; });
+
+  // Find the playlist that was played the longest (of those that remain)
+  const auto& it3{std::ranges::max_element(m_playedPlaylists, {}, [](const PlaylistInformation& i)
+                                           { return i.watchedTime; })};
+
+  item.GetVideoInfoTag()->m_streamDetails = it3->details;
+  const int playlist{it3->playlist};
+  item.GetVideoInfoTag()->m_iTrack = playlist;
+  const std::string path{item.GetDynPath()};
+  item.SetDynPath(URIUtils::GetBlurayPlaylistPath(path, playlist));
+  CLog::LogF(LOGDEBUG, "Main playlist {}", playlist);
 }
 
 int CDVDInputStreamBluray::Read(uint8_t* buf, int buf_size)

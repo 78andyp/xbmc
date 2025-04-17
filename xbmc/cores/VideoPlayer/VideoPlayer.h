@@ -288,6 +288,8 @@ public:
   float GetAVDelay() override;
   bool IsInMenu() const override;
 
+  void UpdateEdl(CEdl& edl) override;
+
   /*!
    * \brief Get the supported menu type
    * \return The supported menu type

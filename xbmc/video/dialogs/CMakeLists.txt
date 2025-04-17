@@ -9,6 +9,7 @@ set(SOURCES GUIDialogAudioSettings.cpp
             GUIDialogVideoManagerExtras.cpp
             GUIDialogVideoManagerVersions.cpp
             GUIDialogVideoOSD.cpp
+			GUIDialogVideoPlaylists.cpp
             GUIDialogVideoSettings.cpp)
 
 set(HEADERS GUIDialogAudioSettings.h
@@ -22,6 +23,7 @@ set(HEADERS GUIDialogAudioSettings.h
             GUIDialogVideoManagerExtras.h
             GUIDialogVideoManagerVersions.h
             GUIDialogVideoOSD.h
+			GUIDialogVideoPlaylists.h
             GUIDialogVideoSettings.h)
 
 if(TARGET ${APP_NAME_LC}::OpenGl OR CORE_SYSTEM_NAME STREQUAL windows OR CORE_SYSTEM_NAME STREQUAL windowsstore)

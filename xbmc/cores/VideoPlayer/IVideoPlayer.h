@@ -24,12 +24,14 @@
 class CDVDMsg;
 class CDVDStreamInfo;
 class CProcessInfo;
+class CEdl;
 
 class IVideoPlayer
 {
 public:
   virtual int OnDiscNavResult(void* pData, int iMessage) = 0;
   virtual void GetVideoResolution(unsigned int &width, unsigned int &height) = 0;
+  virtual void UpdateEdl(CEdl& edl) = 0;
   virtual ~IVideoPlayer() = default;
 };
 

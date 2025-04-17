@@ -154,6 +154,13 @@ public:
   std::optional<std::chrono::milliseconds> GetNextSceneMarker(Direction direction,
                                                               std::chrono::milliseconds clockTime);
 
+  /*!
+   * @brief Adds an edit to the list of EDL edits
+   * @param newEdit the edit to add
+   * @return true if the operation succeeds, false otherwise
+  */
+  bool AddEdit(const EDL::Edit& newEdit);
+
 private:
   // total cut time (edl cuts) in ms
   std::chrono::milliseconds m_totalCutTime;
@@ -176,13 +183,6 @@ private:
    * @return true if the result was processed successfully
    */
   bool ProcessParserResult(const EDL::CEdlParserResult& result);
-
-  /*!
-   * @brief Adds an edit to the list of EDL edits
-   * @param newEdit the edit to add
-   * @return true if the operation succeeds, false otherwise
-  */
-  bool AddEdit(const EDL::Edit& newEdit);
 
   bool AddSceneMarker(std::chrono::milliseconds sceneMarker);
 

@@ -25,6 +25,8 @@ class CFileItemList;
 class CURL;
 class CVideoInfoTag;
 
+struct ChapterInfo;
+
 namespace XFILE
 {
 using namespace std::chrono_literals;

@@ -857,6 +857,8 @@ void CDiscDirectoryHelper::GenerateItem(const CURL& url,
   itemTag->SetDuration(static_cast<int>(duration.count()));
   item->SetProperty("bluray_playlist", playlist);
 
+  itemTag->SetChapters(GetChapterInfo(it->second));
+
   // Get episode title
   const std::string& title{episode.strTitle};
   if (isSpecial == IsSpecial::SPECIAL)
