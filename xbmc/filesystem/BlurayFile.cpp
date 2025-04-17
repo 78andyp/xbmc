@@ -9,6 +9,7 @@
 #include "BlurayFile.h"
 
 #include "URL.h"
+#include "utils/RegExp.h"
 
 #include <assert.h>
 
@@ -34,8 +35,12 @@ std::string CBlurayFile::TranslatePath(const CURL& url)
 
 bool CBlurayFile::Exists(const CURL& url)
 {
-  const CURL baseUrl{TranslatePath(url)};
+  CURL baseUrl{TranslatePath(url)};
   if (baseUrl.GetFileName() == "menu")
     return true;
+  CRegExp regex{true, CRegExp::autoUtf8,
+                R"((.+?\/\d+\.mpls)(?:(?:\/chapter\/\d+)|(?:\/chapters\/\d+-\d+))$)"};
+  if (regex.RegFind(baseUrl.GetFileName()) != -1)
+    baseUrl.SetFileName(regex.GetMatch(1));
   return CFile::Exists(baseUrl);
 }

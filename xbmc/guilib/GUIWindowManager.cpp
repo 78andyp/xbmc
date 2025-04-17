@@ -110,6 +110,7 @@
 #include "video/dialogs/GUIDialogAudioSettings.h"
 #include "video/dialogs/GUIDialogSubtitleSettings.h"
 #include "video/dialogs/GUIDialogVideoBookmarks.h"
+#include "video/dialogs/GUIDialogVideoPlaylists.h"
 #include "video/dialogs/GUIDialogVideoSettings.h"
 
 /* PVR related include Files */
@@ -297,6 +298,7 @@ void CGUIWindowManager::CreateWindows()
   Add(new CGUIDialogVideoInfo);
   Add(new CGUIDialogVideoManagerVersions);
   Add(new CGUIDialogVideoManagerExtras);
+  Add(new CGUIDialogVideoPlaylists);
   Add(new CGUIDialogSelect(WINDOW_DIALOG_SELECT_VIDEO_STREAM));
   Add(new CGUIDialogSelect(WINDOW_DIALOG_SELECT_AUDIO_STREAM));
   Add(new CGUIDialogSelect(WINDOW_DIALOG_SELECT_SUBTITLE_STREAM));
