@@ -798,6 +798,7 @@ msgstr ""
 #: xbmc/dialogs/GUIDialogMediaFilter.cpp
 #: xbmc/playlists/SmartPlaylist.cpp
 #: xbmc/pvr/windows/GUIViewStatePVR.cpp
+#: xbmc/dialogs/GUIDialogSimpleMenu.cpp
 #: addons/skin.estuary/xml/Variables.xml
 #: addons/skin.estuary/xml/View_51_Poster.xml
 #: addons/skin.estuary/xml/DialogPVRInfo.xml
@@ -837,6 +838,7 @@ msgstr ""
 #: xbmc/dialogs/GUIDialogSelect.cpp
 #: xbmc/games/controllers/windows/GUIControllerWindow.cpp
 #: xbmc/settings/dialogs/GUIDialogLibExportSettings.cpp
+#: xbmc/video/dialogs/GUIDialogVideoPlaylists.cpp
 msgctxt "#186"
 msgid "OK"
 msgstr ""
@@ -1619,6 +1621,7 @@ msgctxt "#334"
 msgid "Clean library..."
 msgstr ""
 
+#: xbmc/dialogs/GUIDialogSimpleMenu.cpp
 msgctxt "#335"
 msgid "Start"
 msgstr ""
@@ -14747,7 +14750,10 @@ msgctxt "#21397"
 msgid "High quality pixel shader v2"
 msgstr ""
 
-#empty string with id 21398
+#: xbmc/video/dialogs/GUIDialogVideoPlaylists.cpp
+msgctxt "#21398"
+msgid "Chapters"
+msgstr ""
 
 msgctxt "#21399"
 msgid "Use tween animations"

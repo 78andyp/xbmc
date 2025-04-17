@@ -23,6 +23,8 @@ class CFileItemList;
 class CURL;
 class CVideoInfoTag;
 
+struct ChapterInfo;
+
 namespace XFILE
 {
 
@@ -205,6 +207,8 @@ public:
    * \return true if a playlist was selected or if the disc menu will be used later, false if the user cancelled.
    */
   static bool GetOrShowPlaylistSelection(CFileItem& item);
+
+  static std::vector<ChapterInfo> GetChapterInfo(const PlaylistInfo& playlist);
 
 protected:
   static bool GetDirectoryItems(const std::string& path,

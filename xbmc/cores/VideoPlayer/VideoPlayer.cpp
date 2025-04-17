@@ -870,6 +870,11 @@ void CVideoPlayer::OnStartup()
   UTILS::FONT::ClearTemporaryFonts();
 }
 
+void CVideoPlayer::UpdateEdl(CEdl& edl)
+{
+  m_Edl = edl;
+}
+
 bool CVideoPlayer::OpenInputStream()
 {
   if (m_pInputStream.use_count() > 1)
@@ -3941,12 +3946,16 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
 
     player->SendMessage(std::make_shared<CDVDMsgBool>(CDVDMsg::GENERAL_PAUSE, m_displayLost), 1);
 
-    // look for any EDL files
-    m_Edl.Clear();
-    float fFramesPerSecond = 0.0f;
-    if (m_CurrentVideo.hint.fpsscale > 0.0f)
-      fFramesPerSecond = static_cast<float>(m_CurrentVideo.hint.fpsrate) / static_cast<float>(m_CurrentVideo.hint.fpsscale);
-    m_Edl.ReadEditDecisionLists(m_item, fFramesPerSecond);
+    // look for any EDL files (unless already set by bluray stream)
+    if (!m_Edl.HasCuts())
+    {
+      m_Edl.Clear();
+      float fFramesPerSecond = 0.0f;
+      if (m_CurrentVideo.hint.fpsscale > 0.0f)
+        fFramesPerSecond = static_cast<float>(m_CurrentVideo.hint.fpsrate) /
+                           static_cast<float>(m_CurrentVideo.hint.fpsscale);
+      m_Edl.ReadEditDecisionLists(m_item, fFramesPerSecond);
+    }
     CServiceBroker::GetDataCacheCore().SetEditList(m_Edl.GetEditList());
     CServiceBroker::GetDataCacheCore().SetCuts(m_Edl.GetCutMarkers());
     CServiceBroker::GetDataCacheCore().SetSceneMarkers(m_Edl.GetSceneMarkers());

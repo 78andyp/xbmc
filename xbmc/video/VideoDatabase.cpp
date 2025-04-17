@@ -3714,7 +3714,7 @@ void CVideoDatabase::GetEpisodesByBlurayPath(const std::string& path,
     const std::string blurayPath{URIUtils::AddFileToFolder(url.Get(), "BDMV", "PLAYLIST", "")};
     const std::string sql{
         PrepareSQL("select idFile from episode_view "
-                   "where (strPath = '%s' and strFileName = '%s') or strPath = '%s'",
+                   "where (strPath = '%s' and strFileName = '%s') or strPath LIKE '%s%%'",
                    basePath.c_str(), baseFile.c_str(), blurayPath.c_str())};
     m_pDS->query(sql);
     if (!m_pDS->eof())

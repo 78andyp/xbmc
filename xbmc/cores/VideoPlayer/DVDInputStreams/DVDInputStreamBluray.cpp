@@ -10,6 +10,7 @@
 
 #include "DVDCodecs/Overlay/DVDOverlay.h"
 #include "DVDCodecs/Overlay/DVDOverlayImage.h"
+#include "Edl.h"
 #include "IVideoPlayer.h"
 #include "LangInfo.h"
 #include "ServiceBroker.h"
@@ -22,6 +23,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/Geometry.h"
 #include "utils/LangCodeExpander.h"
+#include "utils/RegExp.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XTimeUtils.h"
@@ -137,20 +139,38 @@ bool CDVDInputStreamBluray::Open()
   bool openDisc = false;
   bool resumable = true;
 
+  unsigned int startChapter{0};
+  unsigned int endChapter{0};
+
   // The item was selected via the simple menu
   if (URIUtils::IsProtocol(strPath, "bluray"))
   {
-    CURL url(strPath);
+    const CURL url(strPath);
     root = url.GetHostName();
     filename = URIUtils::GetFileName(url.GetFileName());
 
     // Check whether disc is AACS protected
-    CURL url2(root);
-    CFileItem item(url2, false);
-    openDisc = VIDEO::IsProtectedBlurayDisc(item);
+    const CURL url2(root);
+    CFileItem base(url2, false);
+    openDisc = VIDEO::IsProtectedBlurayDisc(base);
 
-    // check for a menu call for an image file
-    if (StringUtils::EqualsNoCase(filename, "menu") &&
+    // See if we want to start at or play specific chapter(s)
+    CRegExp c{true, CRegExp::autoUtf8,
+        R"((?:\/)(\d{5}\.mpls)(?:(?:(?:\/chapter\/)(\d{1,3}))|(?:(?:\/chapters\/)(\d{1,3})(?:-)(\d{1,3})))$)"};
+    if (c.RegFind(url.GetFileName()) != -1)
+    {
+      filename = c.GetMatch(1);
+      if (c.GetSubCount() == 2) // /chapter/n
+      {
+        startChapter = static_cast<unsigned int>(std::stoi(c.GetMatch(2)));
+      }
+      else if (c.GetSubCount() == 4) // /chapters/m-n
+      {
+        startChapter = static_cast<unsigned int>(std::stoi(c.GetMatch(3)));
+        endChapter = static_cast<unsigned int>(std::stoi(c.GetMatch(4)));
+      }
+    }
+    else if (StringUtils::EqualsNoCase(filename, "menu") &&
         !(m_item.GetStartOffset() == STARTOFFSET_RESUME && m_item.IsResumable()))
     {
       resumable = false;
@@ -158,13 +178,13 @@ bool CDVDInputStreamBluray::Open()
       // Remove udf:// if present
       if (url2.IsProtocol("udf"))
       {
-        item.SetPath(url2.GetHostName());
-        openDisc = VIDEO::IsProtectedBlurayDisc(item);
+        base.SetPath(url2.GetHostName());
+        openDisc = VIDEO::IsProtectedBlurayDisc(base);
       }
 
-      if (item.IsDiscImage())
+      if (base.IsDiscImage())
       {
-        if (!OpenStream(item))
+        if (!OpenStream(base))
           return false;
 
         openStream = true;
@@ -320,6 +340,34 @@ bool CDVDInputStreamBluray::Open()
   {
     m_navmode = false;
     m_titleInfo = GetTitleFile(filename);
+    
+    if (startChapter > 0)
+    {
+      CEdl edl;
+      EDL::Edit edit;
+
+      // Before start chapter
+      if (startChapter > 1 && m_titleInfo->chapter_count >= startChapter)
+      {
+        edit.start = 0ms;
+        edit.end = std::chrono::milliseconds(m_titleInfo->chapters[startChapter - 1].start / 90);
+        edit.action = EDL::Action::CUT;
+        edl.AddEdit(edit);
+      }
+
+      // After end chapter
+      if (endChapter > startChapter && m_titleInfo->chapter_count >= endChapter)
+      {
+        edit.start = std::chrono::milliseconds((m_titleInfo->chapters[endChapter - 1].start +
+                                                m_titleInfo->chapters[endChapter - 1].duration) /
+                                               90);
+        edit.end = std::chrono::milliseconds(GetTotalTime());
+        edit.action = EDL::Action::CUT;
+        edl.AddEdit(edit);
+      }
+
+      m_player->UpdateEdl(edl);
+    }
   }
   else if (resumable && m_item.GetStartOffset() == STARTOFFSET_RESUME && m_item.IsResumable())
   {
@@ -681,6 +729,10 @@ void CDVDInputStreamBluray::UpdateCurrentState(SPlayerState& state, CFileItem& i
 {
   std::unique_lock<CCriticalSection> lock(m_statesLock);
 
+  if (URIUtils::IsBlurayPath(item.GetDynPath()) &&
+      !StringUtils::EqualsNoCase(URIUtils::GetFileName(item.GetDynPath()), "menu"))
+    return;
+
   // First add current state to the list of playlist states
   SaveCurrentState(state, item.GetVideoInfoTag()->m_streamDetails);
 
@@ -740,7 +792,7 @@ void CDVDInputStreamBluray::UpdateCurrentState(SPlayerState& state, CFileItem& i
   }
 
   // Now remove all short playlists
-  static constexpr unsigned int MIN_PLAYLIST_DURATION{5 * 60}; // 5 minutes
+  static constexpr unsigned int MIN_PLAYLIST_DURATION{5 * 60 * 1000}; // 5 minutes
   if (m_playedPlaylists.size() > 1)
       std::erase_if(m_playedPlaylists, [](const PlaylistInformation& p)
                                           { return p.duration < MIN_PLAYLIST_DURATION; });

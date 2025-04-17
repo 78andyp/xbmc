@@ -1171,6 +1171,9 @@ std::shared_ptr<CFileItem> GetFileItem(const CURL& url,
       subtitleInfo.language = subtitle.lang;
       info->m_streamDetails.AddStream(new CStreamDetailSubtitle(subtitleInfo));
     }
+
+    // Chapters
+    info->SetChapters(CDiscDirectoryHelper::GetChapterInfo(title));
   }
 
   return item;

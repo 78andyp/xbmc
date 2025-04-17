@@ -773,6 +773,8 @@ void CDiscDirectoryHelper::GenerateItem(const CURL& url,
   itemTag->SetDuration(static_cast<int>(duration.count()));
   item->SetProperty("bluray_playlist", playlist);
 
+  itemTag->SetChapters(GetChapterInfo(it->second));
+
   // Get episode title
   const std::string& title{tag.GetTitle()};
   if (isSpecial == IsSpecial::SPECIAL)
@@ -921,6 +923,30 @@ std::vector<CVideoInfoTag> CDiscDirectoryHelper::GetEpisodesOnDisc(const CURL& u
   return episodesOnDisc;
 }
 
+std::vector<ChapterInfo> CDiscDirectoryHelper::GetChapterInfo(const PlaylistInfo& playlist)
+{
+  std::vector<ChapterInfo> chapters;
+  if (!playlist.chapters.empty())
+  {
+    const unsigned int numChapters{static_cast<unsigned int>(playlist.chapters.size())};
+    chapters.reserve(numChapters);
+    std ::chrono::milliseconds start{playlist.chapters[0]};
+    for (unsigned int i = 1; i < numChapters; ++i)
+    {
+      std::chrono::milliseconds end{playlist.chapters[i]};
+      const ChapterInfo chapter{.chapter = i, .start = start, .duration = end - start};
+      chapters.emplace_back(chapter);
+      start = end;
+    }
+
+    // Final chapter end at end of playlist stream
+    const ChapterInfo chapter{
+        .chapter = numChapters, .start = start, .duration = playlist.duration - start};
+    chapters.emplace_back(chapter);
+  }
+  return chapters;
+}
+
 bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(CFileItem& item)
 {
   const bool forceSelection{item.GetProperty("force_playlist_selection").asBoolean(false)};
@@ -999,6 +1025,7 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(CFileItem& item)
       selectedItem = *items[0]; // Main item
 
     item.SetDynPath(selectedItem.GetDynPath());
+    item.GetVideoInfoTag()->SetChapters(selectedItem.GetVideoInfoTag()->GetChapters());
     item.SetProperty("get_stream_details_from_player", true); // Overwrite when played
     item.SetProperty("original_listitem_url", originalDynPath);
   }

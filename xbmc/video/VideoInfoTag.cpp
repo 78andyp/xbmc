@@ -99,6 +99,7 @@ void CVideoInfoTag::Reset()
   m_parsedDetails = 0;
   m_coverArt.clear();
   m_updateSetOverview = true;
+  m_chapters.clear();
 }
 
 bool CVideoInfoTag::Save(TiXmlNode *node, const std::string &tag, bool savePathInfo, const TiXmlElement *additionalNode)
@@ -487,6 +488,9 @@ void CVideoInfoTag::Merge(CVideoInfoTag& other)
   m_hasVideoVersions = other.m_hasVideoVersions;
   m_hasVideoExtras = other.m_hasVideoExtras;
   m_isDefaultVideoVersion = other.m_isDefaultVideoVersion;
+
+  if (!other.m_chapters.empty())
+    m_chapters = other.m_chapters;
 }
 
 void CVideoInfoTag::Archive(CArchive& ar)
@@ -1912,4 +1916,19 @@ void CVideoInfoTag::SetHasVideoExtras(bool hasExtras)
 void CVideoInfoTag::SetIsDefaultVideoVersion(bool isDefaultVideoVersion)
 {
   m_isDefaultVideoVersion = isDefaultVideoVersion;
+}
+
+bool CVideoInfoTag::HasChapters() const
+{
+  return m_chapters.size() > 1;
+}
+
+std::vector<ChapterInfo>& CVideoInfoTag::GetChapters()
+{
+  return m_chapters;
+}
+
+void CVideoInfoTag::SetChapters(const std::vector<ChapterInfo>& chapters)
+{
+  m_chapters = chapters;
 }
