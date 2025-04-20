@@ -132,17 +132,15 @@ class CDiscDirectoryHelper
     ALL
   };
 
-  struct CandidatePlaylistsDurationInformation
-  {
-    unsigned int playlist{0};
-    std::chrono::milliseconds durationDelta{0ms};
-    unsigned int chapters{0};
-  };
-
-  struct SortedPlaylistsInformation
+  struct CandidatePlaylistInformation
   {
     unsigned int playlist{0};
     unsigned int index{0};
+    std::chrono::milliseconds duration{0ms};
+    std::chrono::milliseconds durationDelta{0ms};
+    int multiple{0};
+    unsigned int chapters{0};
+    std::vector<unsigned int> clips;
     std::string languages;
   };
 
@@ -223,10 +221,11 @@ private:
   unsigned int m_numEpisodes;
   unsigned int m_numSpecials;
 
-  std::set<unsigned int> m_playAllPlaylists;
+  std::set<CandidatePlaylistInformation> m_playAllPlaylists;
   std::map<unsigned int, std::map<unsigned int, std::vector<unsigned int>>> m_playAllPlaylistsMap;
   std::vector<std::vector<unsigned int>> m_groups;
-  std::map<unsigned int, unsigned int> m_candidatePlaylists;
+  std::vector<std::vector<CandidatePlaylistInformation>> m_allGroups;
+  std::map<unsigned int, CandidatePlaylistInformation> m_candidatePlaylists;
   std::set<unsigned int> m_candidateSpecials;
 };
 } // namespace XFILE
