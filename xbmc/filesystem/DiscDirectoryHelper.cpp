@@ -476,6 +476,76 @@ void CDiscDirectoryHelper::FindCandidatePlaylists(const std::vector<CVideoInfoTa
         }
         findIdenticalEpisodes = true;
       }
+      else if (!m_allGroups.empty())
+      {
+        // No groups of numEpisodes length so see if there could be double episode playlists
+        // Assume more than one playlist
+        for (auto& group : m_allGroups)
+        {
+          // Calculate multiples
+          // Find shortest playlist in group
+          const auto& min{std::ranges::min_element(
+              group, {}, [](const CandidatePlaylistInformation& i) { return i.duration; })};
+          const auto shortest{min->duration};
+
+          // Then calculate the average of shortest (within 20% of the shortest) playlists
+          constexpr unsigned int SHORTEST_PERCENT{20};
+          auto groupDurations{
+              group |
+              std::views::transform([](const CandidatePlaylistInformation& i)
+                                    { return i.duration; }) |
+              std::views::filter([shortest](const std::chrono::milliseconds i)
+                                 { return i < shortest * (1 + (SHORTEST_PERCENT / 100)); })};
+          const std::chrono::milliseconds averageShortest{
+              std::accumulate(groupDurations.begin(), groupDurations.end(), 0ms) /
+              std::ranges::distance(groupDurations)};
+
+          // Multiples of average shortest playlists (within 15% of the average)
+          constexpr double MULTIPLE_PERCENT{15};
+          for (auto& playlist : group)
+          {
+            double m{static_cast<double>(playlist.duration.count()) /
+                     static_cast<double>(averageShortest.count())};
+            int w{static_cast<int>(std::round(m))};
+            if (m - w < (MULTIPLE_PERCENT / 100))
+              playlist.multiple = w;
+          }
+
+          // Check there are no playlists that are not a multiple
+          if (std::ranges::any_of(group, [](const CandidatePlaylistInformation& i)
+                                  { return i.multiple == 0; }))
+            continue;
+
+          // Check that multiples add up to numEpisodes
+          auto groupMultiples{group |
+                              std::views::transform([](const CandidatePlaylistInformation& i)
+                                                    { return i.multiple; })};
+          if (std::accumulate(groupMultiples.begin(), groupMultiples.end(), 0) !=
+              static_cast<int>(m_numEpisodes))
+            continue;
+
+          // Save candidate episode(s)
+          unsigned int index{
+              m_numSpecials}; // Start at numSpecials as specials (S00) are before episodes in episodesOnDisc
+          for (const auto& playlist : group)
+          {
+            auto playlistInformation{playlist};
+            for (int i = 0; i < playlist.multiple; ++i)
+            {
+              if (m_allEpisodes == AllEpisodes::ALL || index == episodeIndex - m_numSpecials)
+              {
+                playlistInformation.index = index;
+                m_candidatePlaylists.emplace(playlist.playlist, playlistInformation);
+                CLog::LogF(LOGDEBUG, "Candidate playlist {} for episode {}", playlist.playlist,
+                           episodesOnDisc[index].m_iEpisode);
+              }
+              ++index;
+            }
+          }
+          break;
+        }
+        findIdenticalEpisodes = true;
+      }
     }
   }
 
