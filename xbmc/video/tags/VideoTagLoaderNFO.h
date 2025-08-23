@@ -28,15 +28,17 @@ public:
 
   //! \brief Load "tag" from nfo file.
   //! \brief tag Tag to load info into
+  CInfoScanner::InfoType LoadMultiple(KODI::VIDEO::NFOInformationVector& nfoInformation, bool prioritise) override;
+
   CInfoScanner::InfoType Load(CVideoInfoTag& tag,
                               bool prioritise,
-                              std::vector<EmbeddedArt>* = nullptr) override;
+                              std::vector<EmbeddedArt>* art = nullptr) override;
 
 protected:
   //! \brief Find nfo file for item
   //! \param item The item to find NFO file for
   //! \param movieFolder If true, look for movie.nfo
-  std::string FindNFO(const CFileItem& item, bool movieFolder) const;
+  std::vector<std::string> FindNFO(const CFileItem& item, bool movieFolder) const;
 
-  std::string m_path; //!< Path to nfo file
+  std::vector<std::string> m_paths; //!< Path to nfo file(s)
 };

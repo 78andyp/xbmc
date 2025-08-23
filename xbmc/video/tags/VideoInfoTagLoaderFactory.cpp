@@ -17,33 +17,31 @@
 namespace KODI::VIDEO
 {
 
-IVideoInfoTagLoader* CVideoInfoTagLoaderFactory::CreateLoader(const CFileItem& item,
-                                                              const ADDON::ScraperPtr& info,
-                                                              bool lookInFolder,
-                                                              bool forceRefresh)
+std::unique_ptr<IVideoInfoTagLoader> CVideoInfoTagLoaderFactory::CreateLoader(
+    const CFileItem& item, const ADDON::ScraperPtr& info, bool lookInFolder, bool forceRefresh)
 {
+  // Try plugin loader first if conditions are met
   if (item.IsPlugin() && info && info->ID() == "metadata.local")
   {
-    // Direct loading from plugin source with metadata.local scraper
-    CVideoTagLoaderPlugin* plugin = new CVideoTagLoaderPlugin(item, forceRefresh);
+    auto plugin = std::make_unique<CVideoTagLoaderPlugin>(item, forceRefresh);
     if (plugin->HasInfo())
       return plugin;
-    delete plugin;
   }
 
-  CVideoTagLoaderNFO* nfo = new CVideoTagLoaderNFO(item, info, lookInFolder);
+  // Try NFO loader
+  auto nfo = std::make_unique<CVideoTagLoaderNFO>(item, info, lookInFolder);
   if (nfo->HasInfo())
     return nfo;
-  delete nfo;
 
+  // Try FFmpeg loader if extraction is supported
   if (TAGS::CVideoTagExtractionHelper::IsExtractionSupportedFor(item))
   {
-    CVideoTagLoaderFFmpeg* ff = new CVideoTagLoaderFFmpeg(item, info, lookInFolder);
-    if (ff->HasInfo())
-      return ff;
-    delete ff;
+    auto ffmpeg = std::make_unique<CVideoTagLoaderFFmpeg>(item, info, lookInFolder);
+    if (ffmpeg->HasInfo())
+      return ffmpeg;
   }
 
+  // No suitable loader found
   return nullptr;
 }
 

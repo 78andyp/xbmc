@@ -21,10 +21,10 @@ namespace KODI::VIDEO
     //! \brief Returns a tag loader for the given item.
     //! \param item The item to find tag loader for
     //! \param type Type of tag loader. In particular used for tvshows
-    static IVideoInfoTagLoader* CreateLoader(const CFileItem& item,
-                                             const ADDON::ScraperPtr& info,
-                                             bool lookInFolder,
-                                             bool forceRefresh = false);
+    static std::unique_ptr<IVideoInfoTagLoader> CreateLoader(const CFileItem& item,
+                                                             const ADDON::ScraperPtr& info,
+                                                             bool lookInFolder,
+                                                             bool forceRefresh = false);
 
   protected:
     // No instancing of this class

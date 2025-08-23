@@ -28,8 +28,7 @@ using namespace XFILE;
 using namespace ADDON;
 
 CInfoScanner::InfoType CNfoFile::Create(const std::string& strPath,
-                                        const ScraperPtr& info,
-                                        int index)
+                                        const ScraperPtr& info)
 {
   m_info = info; // assume we can use these settings
   m_type = ScraperTypeFromContent(info->Content());
@@ -54,19 +53,7 @@ CInfoScanner::InfoType CNfoFile::Create(const std::string& strPath,
            m_type == AddonType::SCRAPER_MUSICVIDEOS)
   {
     CVideoInfoTag details;
-    // Find nth <movie> tag (index is 1 based)
-    // If it doesn't exist then set bNfo to false
-    if (m_type == AddonType::SCRAPER_MOVIES)
-    {
-      m_headPos = m_doc.find("<movies>");
-      while (index-- > 0)
-      {
-        m_headPos = m_doc.find("<movie", m_headPos + 1);
-        if (m_headPos == std::string::npos)
-          break;
-      }
-    }
-    bNfo = m_headPos != std::string::npos ? GetDetails(details) : false;
+    bNfo = GetDetails(details);
     overrideNfo = details.GetOverride();
   }
 

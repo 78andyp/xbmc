@@ -14,7 +14,6 @@
 
 #include <map>
 #include <memory>
-#include <string>
 #include <vector>
 
 //! \brief Video tag loader from plugin source.
@@ -33,6 +32,11 @@ public:
   CInfoScanner::InfoType Load(CVideoInfoTag& tag,
                               bool prioritise,
                               std::vector<EmbeddedArt>* = nullptr) override;
+
+  CInfoScanner::InfoType LoadMultiple(KODI::VIDEO::NFOInformationVector& media, bool prioritise) override
+  {
+    return CInfoScanner::InfoType::NONE;
+  }
 
   inline std::unique_ptr<KODI::ART::Artwork>& GetArt() { return m_art; }
 

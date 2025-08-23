@@ -11,8 +11,8 @@
 #include "InfoScanner.h"
 #include "addons/Scraper.h"
 
-#include <string>
 #include <utility>
+#include <vector>
 
 class CFileItem;
 class CVideoInfoTag;
@@ -20,6 +20,14 @@ class EmbeddedArt;
 
 namespace KODI::VIDEO
 {
+
+struct NFOInformation
+{
+  std::unique_ptr<CVideoInfoTag> tag;
+  CInfoScanner::InfoType type{CInfoScanner::InfoType::NONE};
+};
+
+using NFOInformationVector = std::vector<NFOInformation>;
 
 //! \brief Base class for video tag loaders.
 class IVideoInfoTagLoader
@@ -45,6 +53,8 @@ public:
   virtual CInfoScanner::InfoType Load(CVideoInfoTag& tag,
                                       bool prioritise,
                                       std::vector<EmbeddedArt>* art = nullptr) = 0;
+
+  virtual CInfoScanner::InfoType LoadMultiple(NFOInformationVector& media, bool prioritise) = 0;
 
   //! \brief Returns url associated with obtained URL (NFO_URL et al).
   const CScraperUrl& ScraperUrl() const { return m_url; }

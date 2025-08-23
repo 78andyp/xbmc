@@ -41,6 +41,11 @@ public:
                               bool,
                               std::vector<EmbeddedArt>* art = nullptr) override;
 
+  CInfoScanner::InfoType LoadMultiple(KODI::VIDEO::NFOInformationVector& media, bool prioritise) override
+  {
+    return CInfoScanner::InfoType::NONE;
+  }
+
   ADDON::ScraperPtr GetScraperInfo() const { return m_info; }
 
 protected:
