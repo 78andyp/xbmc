@@ -1971,13 +1971,16 @@ CVideoInfoScanner::~CVideoInfoScanner()
     }
     else if (content == ContentType::MOVIE_VERSIONS)
     {
-      const int idMovie{pItem->HasProperty("idMovie") ? pItem->GetProperty("idMovie").asInteger32()
-                                                      : -1};
+      const int idMovie{pItem->GetProperty("idMovie").asInteger32(-1)};
       if (idMovie != -1)
       {
-        lResult = m_database.AddMovieVersion(*pItem, idMovie, art);
-        movieDetails.m_iDbId = idMovie;
-        movieDetails.m_type = MediaTypeMovie;
+        pItem->SetArt(art); // May have been filtered above
+        CVideoInfoTag* tag = pItem->GetVideoInfoTag();
+        lResult =
+            m_database.AddVideoAsset(VideoDbContentType::MOVIES, idMovie,
+                                     tag->GetAssetInfo().GetId(), VideoAssetType::VERSION, *pItem)
+                ? tag->m_iFileId
+                : -1;
       }
     }
     else if (content == ContentType::TVSHOWS)
