@@ -31,9 +31,9 @@ public:
   * might exist where an overlay shouldn't be added to the collection if completely contained in another
   * overlay.
   *
-  * \param pPicture pointer to the overlay to be evaluated and possibly added to the collection
+  * \param newOverlay pointer to the overlay to be evaluated and possibly added to the collection
   */
-  void ProcessAndAddOverlayIfValid(const std::shared_ptr<CDVDOverlay>& pPicture);
+  void ProcessAndAddOverlayIfValid(const std::shared_ptr<CDVDOverlay>& newOverlay);
 
   VecOverlays* GetOverlays(); // get the first overlay in this fifo
   bool ContainsOverlayType(DVDOverlayType type);
@@ -46,14 +46,12 @@ public:
   void Flush();
 
   void CleanUp(double pts); // validates all overlays against current pts
-  size_t GetSize();
+  size_t GetSize() const;
 
   void UpdateOverlayInfo(const std::shared_ptr<CDVDInputStreamNavigator>& pStream,
                          CDVDDemuxSPU* pSpu,
                          int iAction);
 
 private:
-  VecOverlays::iterator Remove(VecOverlays::iterator itOverlay); // removes a specific overlay
-
   VecOverlays m_overlays;
 };
