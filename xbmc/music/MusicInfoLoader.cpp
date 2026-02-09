@@ -15,6 +15,7 @@
 #include "MusicDatabase.h"
 #include "MusicThumbLoader.h"
 #include "ServiceBroker.h"
+#include "filesystem/Directory.h"
 #include "filesystem/File.h"
 #include "filesystem/MusicDatabaseDirectory/DirectoryNode.h"
 #include "filesystem/MusicDatabaseDirectory/QueryParams.h"
@@ -29,6 +30,8 @@
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
+
+#include <ranges>
 
 using namespace KODI;
 using namespace MUSIC_INFO;
@@ -198,16 +201,7 @@ bool CMusicInfoLoader::LoadItemLookup(CFileItem* pItem)
         m_databaseHits++;
       }
 
-      /*
-      This only loads the item with the song from the database when it maps to a single song,
-      it can not load song data for items with cuesheets that expand to multiple songs.
-      For songs from embedded or separate cuesheets strFileName is not unique, so the song map for
-      the path will have the list of songs from that file. But items with cuesheets are expanded
-      (replacing each item with items for every track) elsewhere. When the item we are looking up
-      has a cuesheet document or is a music file with a cuesheet embedded in the tags, and it maps
-      to more than one song then we can not fill the tag data and thumb from the database.
-      */
-      MAPSONGS::iterator it = m_songsMap.find(pItem->GetPath()); // Find file in song map
+      const auto it = m_songsMap.find(pItem->GetPath()); // Find file in song map
       if (it != m_songsMap.end() && it->second.size() == 1)
       {
         // Have we loaded this item from database before,
@@ -215,6 +209,36 @@ bool CMusicInfoLoader::LoadItemLookup(CFileItem* pItem)
         pItem->GetMusicInfoTag()->SetSong(it->second[0]);
         if (!it->second[0].strThumb.empty())
           pItem->SetArt("thumb", it->second[0].strThumb);
+      }
+      else if (it != m_songsMap.end() && it->second.size() > 1 &&
+               pItem->GetProperty("cueloadinformation").asBoolean(false))
+      {
+        // Part of cuesheet - so need to reference songs by their musicdb:// path
+        // Get album ID
+        const int idAlbum{it->second[0].idAlbum};
+
+        // Generate musicdb:// URL
+        CURL musicDbURL;
+        musicDbURL.SetProtocol("musicdb");
+        musicDbURL.SetFileName(URIUtils::AddFileToFolder("albums", std::to_string(idAlbum)));
+
+        // Get all the songs in the album - with musicdb:// paths
+        if (CFileItemList dbItems;
+            CDirectory::GetDirectory(musicDbURL, dbItems, "", DIR_FLAG_DEFAULTS))
+        {
+          // Find correct song based on file and offsets
+          const auto& it2{
+              std::ranges::find_if(dbItems,
+                                   [&pItem](const auto& songItem)
+                                   {
+                                     return songItem->GetDynPath() == pItem->GetPath() &&
+                                            songItem->GetStartOffset() == pItem->GetStartOffset() &&
+                                            songItem->GetEndOffset() == pItem->GetEndOffset();
+                                   })};
+          if (it2 != dbItems.end())
+            *pItem =
+                **it2; // Replace CFileItem (as also has MusicInfoTag() populated along with correct paths)
+        }
       }
       else if (MUSIC::IsMusicDb(*pItem))
       { // a music db item that doesn't have tag loaded - grab details from the database
