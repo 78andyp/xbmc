@@ -8611,16 +8611,27 @@ std::string CVideoDatabase::GetContentForPath(const std::string& strPath)
       // 1. if episodes are in the path then we're in episodes.
       // 2. if no episodes are found, and content was set directly on this path, then we're in shows.
       // 3. if no episodes are found, and content was not set directly on this path, we're in seasons (assumes tvshows/seasons/episodes)
-      std::string sql = "SELECT COUNT(*) FROM episode_view ";
-
-      if (foundDirectly)
-        sql += PrepareSQL("WHERE strPath = '%s'", strPath.c_str());
-      else
-        sql += PrepareSQL("WHERE strPath LIKE '%s%%'", strPath.c_str());
+      std::string sql =
+          PrepareSQL("SELECT COUNT(*) FROM episode_view WHERE strPath = '%s'", strPath.c_str());
 
       m_pDS->query( sql );
       if (m_pDS->num_rows() && m_pDS->fv(0).get_asInt() > 0)
         return "episodes";
+
+      // If the episodes are in individual archives then strPath may point to the directory containing the archive
+      // rather than the archive itself (eg. rar://). So see if there are any matches using the parentpathid.
+      sql = PrepareSQL("SELECT COUNT(*) FROM episode e "
+                       "JOIN path p ON e.c%02d = p.idPath "
+                       "JOIN files f ON e.idFile = f.idFile "
+                       "WHERE p.strPath = '%s' "
+                       "GROUP BY f.idPath "
+                       "HAVING COUNT(e.idEpisode) = 1",
+                       VIDEODB_ID_EPISODE_PARENTPATHID, strPath.c_str());
+      m_pDS->query(sql);
+      if (m_pDS->num_rows() && m_pDS->fv(0).get_asInt() > 0)
+        return "episodes";
+
+      // If the scraper was set directly on this path, it is a tvshows root
       return foundDirectly ? "tvshows" : "seasons";
     }
     return TranslateContent(scraper->Content());
@@ -11518,6 +11529,14 @@ bool CVideoDatabase::GetItemsForPath(const std::string &content, const std::stri
       GetItemsForPath(content, p, items);
 
     return !items.IsEmpty();
+  }
+
+  if (URIUtils::IsArchive(CURL(path)))
+  {
+    std::string parent = URIUtils::GetParentPath(path);
+    if (!parent.empty() && parent != path)
+      return GetItemsForPath(content, parent, items);
+    return false;
   }
 
   int pathID = GetPathId(path);
