@@ -1375,6 +1375,87 @@ TEST_F(TestURIUtils, UpdateUrlEncoding)
   EXPECT_STRCASEEQ(newUrl.c_str(), oldUrl.c_str());
 }
 
+TEST_F(TestURIUtils, SanitiseUrlEncoding)
+{
+  std::string dirty = "rar://D%3A%2FMovies%2Fmovie.rar/movie.mkv";
+  std::string clean = "rar://D%3a%5cMovies%5cmovie.rar/movie.mkv";
+  EXPECT_EQ(clean,
+            URIUtils::SanitiseUrlEncoding(dirty)); // lower case encoding and '\' in encoded path
+
+  dirty = "archive://D%3A%2FMovies%2Fmovie.rar/movie.mkv";
+  clean = "archive://D%3a%5cMovies%5cmovie.rar/movie.mkv";
+  EXPECT_EQ(clean,
+            URIUtils::SanitiseUrlEncoding(dirty)); // lower case encoding and '\' in encoded path
+
+  dirty = "rar://D%3A%5CMovies%5Cmovie.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // lower case encoding
+
+  dirty = "rar://D%3a%2fMovies%2fmovie.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // '\' in encoded path
+
+  dirty = "rar://%2FMovies%2Fmovie.rar/movie.mkv";
+  clean = "rar://%2fMovies%2fmovie.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // lower case encoding
+
+  dirty =
+      "bluray://udf%3a%2f%2fsmb%253a%252f%252fsomepath%252fpath%252fmovie.iso%2f/root/episode/3/4";
+  clean = dirty;
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // unchanged
+
+  dirty = "rar://D%3A%2FMovies%2Fmovie.rar/movie%DD/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie.rar/movie%DD/movie.mkv";
+  EXPECT_EQ(clean,
+            URIUtils::SanitiseUrlEncoding(dirty)); // only sanitise hostname
+
+  // Malformed encoding: lone % at end of hostname - passed through unchanged
+  dirty = "rar://D%3a%5cMovies%5cmovie%.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie%.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // lone % unchanged
+
+  // Malformed encoding: % followed by single hex digit then end of hostname
+  dirty = "rar://D%3a%5cMovies%5cmovie%2.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie%2.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // incomplete sequence unchanged
+
+  // Malformed encoding: % followed by one valid then one invalid hex digit
+  dirty = "rar://D%3a%5cMovies%5cmovie%2Z.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie%2Z.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // partial invalid sequence unchanged
+
+  // Malformed encoding: % followed by two invalid hex digits
+  dirty = "rar://D%3a%5cMovies%5cmovie%ZZ.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5cmovie%ZZ.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // fully invalid sequence unchanged
+
+  // Malformed encoding followed by valid encoding: valid sequence still normalised
+  dirty = "rar://D%3A%5CMovies%5C%2Zmovie.rar/movie.mkv";
+  clean = "rar://D%3a%5cMovies%5c%2Zmovie.rar/movie.mkv";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(
+                       dirty)); // invalid sequence unchanged, valid sequences lowercased
+
+  // Malformed protocol with no hostname or path at all
+  dirty = "rar://";
+  clean = "rar://";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // empty hostname
+
+  // Malformed protocol marker at very end of string
+  dirty = "rar:/";
+  clean = "rar:/";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // not a valid protocol, returned as-is
+
+  // Malformed with no :// at all - returned unchanged
+  dirty = "D%3A%5CMovies%5Cmovie.rar";
+  clean = "D%3A%5CMovies%5Cmovie.rar";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty)); // no protocol, returned as-is
+
+  // Malformed hostname only, no trailing slash or path
+  dirty = "rar://D%3A%5Cmovie.rar";
+  clean = "rar://D%3a%5cmovie.rar";
+  EXPECT_EQ(clean, URIUtils::SanitiseUrlEncoding(dirty));
+}
+
 struct URLEncodings
 {
   std::string_view input;
