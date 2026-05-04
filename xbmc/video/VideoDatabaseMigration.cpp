@@ -1197,7 +1197,10 @@ void CVideoDatabase::UpdateTables(int iVersion)
                                LOCAL_VIDEODB_ID_EPISODE_RUNTIME, LOCAL_VIDEODB_ID_EPISODE_RUNTIME)};
     m_pDS->exec(sql);
 
-    m_pDS->exec("SET optimizer_switch = 'derived_merge=off'");
+    sql = PrepareSQL("SET optimizer_switch = 'derived_merge=off'");
+    if (!sql.empty()) // Not supported by SQLite
+      m_pDS->exec(sql);
+
     sql = PrepareSQL("DELETE FROM streamdetails "
                      "WHERE iVideoHeight = 0 AND iVideoWidth = 0 AND iStreamType = 0 "
                      " AND idFile IN "
@@ -1210,7 +1213,10 @@ void CVideoDatabase::UpdateTables(int iVersion)
                      "              AND e.c%02d = streamdetails.iVideoDuration)",
                      LOCAL_VIDEODB_ID_EPISODE_RUNTIME, LOCAL_VIDEODB_ID_EPISODE_RUNTIME);
     m_pDS->exec(sql);
-    m_pDS->exec("SET optimizer_switch = 'derived_merge=on'");
+
+    sql = PrepareSQL("SET optimizer_switch = 'derived_merge=on'");
+    if (!sql.empty()) // Not supported by SQLite
+      m_pDS->exec(sql);
   }
 }
 

@@ -630,6 +630,10 @@ std::string SqliteDatabase::vprepare(std::string_view format, va_list args)
   char* p;
   size_t pos;
 
+  // SET commands are not supported by sqlite3_vmprintf
+  if (strFormat.starts_with("SET "))
+    return strResult;
+
   //  %q is the sqlite format string for %s.
   //  Any bad character, like "'", will be replaced with a proper one
   pos = 0;
