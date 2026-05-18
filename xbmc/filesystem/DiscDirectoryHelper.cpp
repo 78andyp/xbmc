@@ -324,7 +324,7 @@ void CDiscDirectoryHelper::FindGroups(const PlaylistMap& playlists)
   }
 }
 
-void CDiscDirectoryHelper::UsePlayAllPlaylistMethod(unsigned int episodeIndex,
+void CDiscDirectoryHelper::UsePlayAllPlaylistMethod(int episodeIndex,
                                                     const PlaylistMap& playlists)
 {
   CLog::LogFC(LOGDEBUG, LOGBLURAY, "Using Play All playlist method");
@@ -381,7 +381,7 @@ void CDiscDirectoryHelper::UsePlayAllPlaylistMethod(unsigned int episodeIndex,
   }
 }
 
-void CDiscDirectoryHelper::UseLongOrCommonMethodForSingleEpisode(unsigned int episodeIndex,
+void CDiscDirectoryHelper::UseLongOrCommonMethodForSingleEpisode(int episodeIndex,
                                                                  const PlaylistMap& playlists)
 {
   // Method 2b - Need to think about the special case of only one episode on disc
@@ -422,11 +422,12 @@ void CDiscDirectoryHelper::UseLongOrCommonMethodForSingleEpisode(unsigned int ep
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Single Episode - found using single long playlist method");
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Candidate playlist {}", playlist);
     m_candidatePlaylists.try_emplace(
-        playlist, CandidatePlaylistInformation{.playlist = playlist,
-                                               .index = episodeIndex,
-                                               .duration = playlistInformation.duration,
-                                               .clips = playlistInformation.clips,
-                                               .languages = playlistInformation.languages});
+        playlist,
+        CandidatePlaylistInformation{.playlist = playlist,
+                                     .index = m_allEpisodes == AllEpisodes::ALL ? 0u : episodeIndex,
+                                     .duration = playlistInformation.duration,
+                                     .clips = playlistInformation.clips,
+                                     .languages = playlistInformation.languages});
   }
   else if (commonPlaylist != playlistsView.end())
   {
@@ -435,11 +436,12 @@ void CDiscDirectoryHelper::UseLongOrCommonMethodForSingleEpisode(unsigned int ep
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Single Episode - found using common playlist method");
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Candidate playlist {}", *commonPlaylist);
     m_candidatePlaylists.try_emplace(
-        *commonPlaylist, CandidatePlaylistInformation{.playlist = *commonPlaylist,
-                                                      .index = episodeIndex,
-                                                      .duration = playlistInformation.duration,
-                                                      .clips = playlistInformation.clips,
-                                                      .languages = playlistInformation.languages});
+        *commonPlaylist,
+        CandidatePlaylistInformation{.playlist = *commonPlaylist,
+                                     .index = m_allEpisodes == AllEpisodes::ALL ? 0u : episodeIndex,
+                                     .duration = playlistInformation.duration,
+                                     .clips = playlistInformation.clips,
+                                     .languages = playlistInformation.languages});
   }
 }
 
@@ -461,7 +463,7 @@ std::vector<std::vector<CDiscDirectoryHelper::CandidatePlaylistInformation>> CDi
 }
 
 void CDiscDirectoryHelper::GetPlaylistsFromGroup(
-    unsigned int episodeIndex, const std::vector<CandidatePlaylistInformation>& group)
+    int episodeIndex, const std::vector<CandidatePlaylistInformation>& group)
 {
   for (unsigned int i = 0; i < m_numEpisodes; ++i)
   {
@@ -490,7 +492,7 @@ bool CheckDurationsWithinTolerance(std::chrono::milliseconds episodeDuration,
 }
 } // namespace
 
-void CDiscDirectoryHelper::UseGroupMethod(unsigned int episodeIndex,
+void CDiscDirectoryHelper::UseGroupMethod(int episodeIndex,
                                           const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc)
 {
   // Method 2ai - More than one episode on disc
@@ -514,19 +516,39 @@ void CDiscDirectoryHelper::UseGroupMethod(unsigned int episodeIndex,
     // Now look for groups that contain same/more than numEpisodes playlists (with duplicates)
     // Check that the first numEpisodes playlists have a duration within 20% of the desired episode
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Using group method - relaxed number of playlists");
-    const std::chrono::milliseconds episodeDuration{episodesOnDisc[episodeIndex].duration * 1000ms};
+    std::chrono::milliseconds episodeDuration;
+    if (m_allEpisodes == AllEpisodes::ALL)
+    {
+      const double mean{std::accumulate(episodesOnDisc.begin(), episodesOnDisc.end(), 0.0,
+                                        [](double s, const KODI::VIDEO::EPISODE& e)
+                                        { return s + e.duration; }) /
+                        static_cast<double>(episodesOnDisc.size())};
+
+      const auto [sum, count]{
+          std::accumulate(episodesOnDisc.begin(), episodesOnDisc.end(), std::pair{0.0, 0},
+                          [=](auto acc, const KODI::VIDEO::EPISODE& e)
+                          {
+                            return std::abs(e.duration - mean) <= mean * 0.2
+                                       ? std::pair{acc.first + e.duration, acc.second + 1}
+                                       : acc;
+                          })};
+
+      episodeDuration =
+          std::chrono::milliseconds(count ? static_cast<long long>(sum / count) : 0) * 1000;
+    }
+    else
+      episodeDuration = episodesOnDisc[episodeIndex].duration * 1000ms;
     for (const auto& group : m_groups)
     {
       if (group.size() < m_numEpisodes)
         continue;
 
       // Check duration
-      if (!std::ranges::all_of(group | std::views::take(m_numEpisodes) |
-                                   std::views::transform(&CandidatePlaylistInformation::duration),
-                               [episodeDuration](const std::chrono::milliseconds playlistDuration) {
-                                 return CheckDurationsWithinTolerance(episodeDuration,
-                                                                      playlistDuration);
-                               }))
+      if (!std::ranges::all_of(
+              group | std::views::take(m_numEpisodes) |
+                  std::views::transform(&CandidatePlaylistInformation::duration),
+              [episodeDuration](const std::chrono::milliseconds playlistDuration)
+              { return CheckDurationsWithinTolerance(episodeDuration, playlistDuration); }))
         continue;
 
       GetPlaylistsFromGroup(episodeIndex, group);
@@ -537,7 +559,7 @@ void CDiscDirectoryHelper::UseGroupMethod(unsigned int episodeIndex,
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "No candidate playlists found");
 }
 
-void CDiscDirectoryHelper::UseTotalMethod(unsigned int episodeIndex,
+void CDiscDirectoryHelper::UseTotalMethod(int episodeIndex,
                                           const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc,
                                           const PlaylistMap& playlists)
 {
@@ -559,20 +581,25 @@ void CDiscDirectoryHelper::UseTotalMethod(unsigned int episodeIndex,
         return CheckDurationsWithinTolerance(episodeDuration, playlistDuration);
       })};
 
-  if (!allLengthsMatch || episodeIndex >= playlists.size())
+  if (!allLengthsMatch || (m_allEpisodes != AllEpisodes::ALL &&
+                           static_cast<unsigned int>(episodeIndex) >= playlists.size()))
   {
     CLog::LogF(LOGDEBUG, "No candidate playlists found");
     return;
   }
 
-  const auto& playlist{std::next(playlists.begin(), episodeIndex)->second};
-  m_candidatePlaylists.try_emplace(playlist.playlist,
-                                   CandidatePlaylistInformation{.playlist = playlist.playlist,
-                                                                .index = episodeIndex,
-                                                                .duration = playlist.duration,
-                                                                .clips = playlist.clips,
-                                                                .languages = playlist.languages});
-  CLog::LogF(LOGDEBUG, "Candidate playlist {}", playlist.playlist);
+  std::vector<CandidatePlaylistInformation> candidates;
+  candidates.reserve(playlists.size());
+  std::ranges::transform(playlists, std::back_inserter(candidates),
+                         [](const PlaylistMapEntry& p) -> CandidatePlaylistInformation
+                         {
+                           const auto& [playlist, info] = p;
+                           return {.playlist = playlist,
+                                   .duration = info.duration,
+                                   .clips = info.clips,
+                                   .languages = info.languages};
+                         });
+  GetPlaylistsFromGroup(episodeIndex, candidates);
 }
 
 int CDiscDirectoryHelper::CalculateMultiple(std::chrono::milliseconds duration,
@@ -588,7 +615,7 @@ int CDiscDirectoryHelper::CalculateMultiple(std::chrono::milliseconds duration,
 }
 
 void CDiscDirectoryHelper::UseGroupsWithMultiplesMethod(
-    unsigned int episodeIndex, const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc)
+    int episodeIndex, const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc)
 {
   // No groups of numEpisodes length so see if there could be double episode playlists
   // Assume more than one playlist
@@ -725,7 +752,7 @@ void CDiscDirectoryHelper::AddIdenticalPlaylists(const PlaylistMap& playlists)
 
 void CDiscDirectoryHelper::FindCandidatePlaylists(
     const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc,
-    unsigned int episodeIndex,
+    int episodeIndex,
     const PlaylistMap& playlists)
 {
   // At this stage we have a number of ways of trying to determine the correct playlist for an episode
@@ -1044,6 +1071,10 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(CFileItem& item, MenuDecis
   const std::string directory{
       [&item, &originalDynPath, playback]
       {
+        // All episodes
+        if (item.HasProperty("episodes_start"))
+          return URIUtils::GetBlurayAllEpisodesPath(originalDynPath);
+
         // Single episode
         if (item.GetVideoContentType() == VideoDbContentType::EPISODES)
         {
