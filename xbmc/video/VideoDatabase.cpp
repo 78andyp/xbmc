@@ -8675,6 +8675,16 @@ std::string CVideoDatabase::GetContentForPath(const std::string& strPath)
       m_pDS->query( sql );
       if (m_pDS->num_rows() && m_pDS->fv(0).get_asInt() > 0)
         return "episodes";
+
+      // If the episodes have bluray:// paths see if there are any matches using the parentpathid
+      sql = PrepareSQL("SELECT COUNT(*) FROM episode e "
+                       "JOIN path p ON e.c%02d = p.idPath "
+                       "WHERE p.strPath = '%s'",
+                       VIDEODB_ID_EPISODE_PARENTPATHID, strPath.c_str());
+      m_pDS->query(sql);
+      if (m_pDS->num_rows() && m_pDS->fv(0).get_asInt() > 0)
+        return "episodes";
+
       return foundDirectly ? "tvshows" : "seasons";
     }
     return TranslateContent(scraper->Content());
@@ -9479,6 +9489,34 @@ void CVideoDatabase::GetMusicVideosByName(const std::string& strSearch, CFileIte
   {
     CLog::LogF(LOGERROR, "({}) failed", strSQL);
   }
+}
+
+std::string CVideoDatabase::GetPlotByShowId(int idShow)
+{
+  std::string strSQL;
+
+  try
+  {
+    if (nullptr == m_pDB)
+      return "";
+    if (nullptr == m_pDS)
+      return "";
+
+    strSQL = PrepareSQL("SELECT c%02d FROM tvshow WHERE idShow = %i", VIDEODB_ID_TV_PLOT, idShow);
+    m_pDS->query(strSQL);
+
+    std::string plot{};
+    if (!m_pDS->eof())
+      plot = m_pDS->fv(0).get_asString();
+
+    m_pDS->close();
+    return plot;
+  }
+  catch (...)
+  {
+    CLog::LogF(LOGERROR, "({}) failed", strSQL);
+  }
+  return {};
 }
 
 void CVideoDatabase::GetEpisodesByPlot(const std::string& strSearch, CFileItemList& items)

@@ -24,7 +24,6 @@
 #include "filesystem/VideoDatabaseDirectory/QueryParams.h"
 #include "games/GameUtils.h"
 #include "games/tags/GameInfoTag.h"
-#include "media/MediaLockState.h"
 #include "music/Album.h"
 #include "music/Artist.h"
 #include "music/MusicDatabase.h"
@@ -1308,7 +1307,134 @@ bool CFileItem::IsAlbum() const
   return m_bIsAlbum;
 }
 
-void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
+namespace
+{
+std::vector<std::tuple<int, int, int>> ParseEpisodes(const std::string& input)
+{
+  std::map<int, std::set<int>> allEpisodes;
+
+  CRegExp pattern;
+  if (pattern.RegComp(R"(S(\d+)E(\d+))") != 0)
+  {
+    CLog::LogF(LOGERROR, "Failed to compile episode regex pattern");
+    return {};
+  }
+
+  // Parse string
+  int pos = 0;
+  while ((pos = pattern.RegFind(input, pos)) >= 0)
+  {
+    int season = static_cast<int>(std::strtol(pattern.GetMatch(1).c_str(), nullptr, 10));
+    int episode = static_cast<int>(std::strtol(pattern.GetMatch(2).c_str(), nullptr, 10));
+    allEpisodes[season].insert(episode);
+    pos += pattern.GetFindLen();
+  }
+
+  // Now find ranges
+  std::vector<std::tuple<int, int, int>> result;
+  for (const auto& [season, episodes] : allEpisodes)
+  {
+    if (episodes.empty())
+      continue;
+
+    int rangeStart{*episodes.begin()};
+    int rangeEnd{rangeStart};
+    for (auto it = std::next(episodes.begin()); it != episodes.end(); ++it)
+    {
+      if (*it == rangeEnd + 1)
+        rangeEnd = *it;
+      else
+      {
+        result.emplace_back(season, rangeStart, rangeEnd);
+        rangeStart = rangeEnd = *it;
+      }
+    }
+    result.emplace_back(season, rangeStart, rangeEnd);
+  }
+
+  return result;
+}
+
+std::string GetEpisodesLabel(const CFileItem& item)
+{
+  const std::string episodeString{item.GetProperty("episodes").asString("")};
+  const int numSpecials{item.GetProperty("episodes_specials").asInteger32(0)};
+  const auto episodes{ParseEpisodes(episodeString)};
+  const bool hasSpecials{numSpecials > 0};
+  bool singleSeason{!episodes.empty() &&
+                    std::get<0>(episodes.front()) == std::get<0>(episodes.back())};
+
+  constexpr int BASE{21486};
+  constexpr int RANGE{1};
+  constexpr int SEASON{2};
+  constexpr int SPECIALS{21490};
+  constexpr int MIDDLE{21491};
+  constexpr int END{21492};
+
+  std::vector<std::string> labels;
+  if (!episodes.empty())
+  {
+    for (const auto& [season, startEpisode, endEpisode] : episodes)
+    {
+      if (singleSeason)
+      {
+        if (endEpisode == startEpisode)
+          labels.push_back(StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(BASE),
+              startEpisode));
+        else
+          labels.push_back(StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(BASE + RANGE),
+              startEpisode, endEpisode));
+      }
+      else
+      {
+        if (endEpisode == startEpisode)
+          labels.push_back(StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(BASE + SEASON),
+              season, startEpisode));
+        else
+          labels.push_back(
+              StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                                      BASE + SEASON + RANGE),
+                                  season, startEpisode, endEpisode));
+      }
+    }
+  }
+  if (hasSpecials)
+    labels.push_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(SPECIALS));
+
+  // Generate label
+  std::string label;
+  if (labels.size() > 2)
+  {
+    label = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(MIDDLE), labels[0],
+        labels[1]);
+    for (unsigned int i = 2; i < labels.size() - 1; ++i)
+      label = StringUtils::Format(
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(MIDDLE), label,
+          labels[i]);
+    label =
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(END),
+                            label, labels.back());
+  }
+  else if (labels.size() == 2)
+  {
+    label =
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(END),
+                            labels[0], labels[1]);
+  }
+  else if (labels.size() == 1)
+    label = labels[0];
+
+  return label;
+}
+} // namespace
+
+void CFileItem::UpdateInfo(const CFileItem& item,
+                           bool replaceLabels /* = true */,
+                           MultipleEpisodes replaceEpisodes /* = DONT_GROUP_MULTIPLE_EPISODES */)
 {
   if (item.HasVideoInfoTag())
   { // copy info across
@@ -1376,8 +1502,26 @@ void CFileItem::UpdateInfo(const CFileItem &item, bool replaceLabels /*=true*/)
     SetInvalid();
   }
   SetDynPath(item.GetDynPath());
-  if (replaceLabels && !item.GetLabel().empty())
-    SetLabel(item.GetLabel());
+
+  // Alter label to episode number(s) if requested
+  std::string label;
+  if (replaceLabels)
+  {
+    if (replaceEpisodes == MultipleEpisodes::GROUP_MULTIPLE_EPISODES &&
+        item.HasProperty("episodes") && item.GetVideoContentType() == VideoDbContentType::EPISODES)
+    {
+      label = GetEpisodesLabel(item);
+
+      // Multiple episodes so use show plot rather than episode plot
+      if (HasVideoInfoTag() && item.HasProperty("episodes_show_plot"))
+        GetVideoInfoTag()->m_strPlot = item.GetProperty("episodes_show_plot").asString();
+    }
+    else if (!item.GetLabel().empty())
+      label = item.GetLabel();
+  }
+  if (!label.empty())
+    SetLabel(label);
+
   if (replaceLabels && !item.GetLabel2().empty())
     SetLabel2(item.GetLabel2());
   if (!item.GetArt().empty())
