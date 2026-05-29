@@ -47,8 +47,6 @@ public:
   //! \brief Empty destructor.
   virtual ~CInfoScanner() = default;
 
-  virtual bool DoScan(const std::string& strDirectory) = 0;
-
   /*! \brief Check if the folder is excluded from scanning process
    \param strDirectory Directory to scan
    \return true if there is a .nomedia file
@@ -64,6 +62,8 @@ public:
 protected:
   //! \brief Protected constructor to only allow subclass instances.
   CInfoScanner() = default;
+
+  virtual bool DoScan(const std::string& strDirectory, bool* foundContent = nullptr) = 0;
 
   std::set<std::string, std::less<>> m_pathsToScan; //!< Set of paths to scan
   bool m_showDialog = false; //!< Whether or not to show progress bar dialog

@@ -11,7 +11,6 @@
 #include "InfoScanner.h"
 #include "VideoDatabase.h"
 #include "addons/Scraper.h"
-#include "guilib/GUIListItem.h"
 #include "utils/Artwork.h"
 #include "utils/RegExp.h"
 
@@ -155,7 +154,7 @@ namespace KODI::VIDEO
 
   protected:
     virtual void Process();
-    bool DoScan(const std::string& strDirectory) override;
+    bool DoScan(const std::string& strDirectory, bool* foundContent = nullptr) override;
 
     InfoRet RetrieveInfoForTvShow(CFileItem* pItem,
                                   bool bDirNames,
