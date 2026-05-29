@@ -479,7 +479,7 @@ static std::string Prettify(const std::string& strDirectory)
   return CURL::Decode(url.GetWithoutUserDetails());
 }
 
-bool CMusicInfoScanner::DoScan(const std::string& strDirectory)
+bool CMusicInfoScanner::DoScan(const std::string& strDirectory, bool* foundContent /* = nullptr */)
 {
   if (m_handle)
   {
@@ -538,6 +538,9 @@ bool CMusicInfoScanner::DoScan(const std::string& strDirectory)
     {
       if (m_handle)
         OnDirectoryScanned(strDirectory);
+
+      if (foundContent)
+        *foundContent = true;
     }
 
     // save information about this folder
@@ -569,7 +572,7 @@ bool CMusicInfoScanner::DoScan(const std::string& strDirectory)
     if (pItem->IsFolder() && !pItem->IsParentFolder() && !PLAYLIST::IsPlayList(*pItem))
     {
       std::string strPath=pItem->GetPath();
-      if (!DoScan(strPath))
+      if (!DoScan(strPath, foundContent))
       {
         m_bStop = true;
       }
