@@ -27,12 +27,9 @@
 #include "utils/log.h"
 
 #include <algorithm>
-#include <cctype>
-#include <functional>
 #include <map>
 #include <memory>
 #include <sstream>
-#include <stdlib.h>
 #include <string>
 #include <vector>
 
@@ -1209,9 +1206,12 @@ void CVideoDatabase::UpdateTables(int iVersion)
     m_pDS->dropIndex("episode", "id_episode_file_2");
     m_pDS->dropIndex("streamdetails", "ix_streamdetails");
   }
+
+  if (iVersion < 147)
+    m_pDS->exec("ALTER TABLE streamdetails ADD iSource INTEGER DEFAULT 40");
 }
 
 int CVideoDatabase::GetSchemaVersion() const
 {
-  return 146;
+  return 147;
 }
