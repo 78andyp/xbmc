@@ -9,6 +9,9 @@
 #include "WIN32Util.h"
 
 #include "CompileInfo.h"
+#ifdef TARGET_WINDOWS_DESKTOP
+#include "DisplayUtilsWin32.h"
+#endif
 #include "ServiceBroker.h"
 #include "Util.h"
 #include "WindowHelper.h"
@@ -22,20 +25,11 @@
 #include "utils/URIUtils.h"
 #include "utils/log.h"
 
-#include "platform/win32/CharsetConverter.h"
-
-#ifdef TARGET_WINDOWS_DESKTOP
-#include "DisplayUtilsWin32.h"
-#endif
-
-#include <PowrProf.h>
-
+#include <array>
 #ifdef TARGET_WINDOWS_DESKTOP
 #include <cassert>
 #endif
-#include <array>
 #include <format>
-#include <locale.h>
 #include <sstream>
 
 #include <shellapi.h>
@@ -555,26 +549,66 @@ HRESULT CWIN32Util::ToggleTray(const char cDriveLetter)
   }
 
   auto strVolFormat = ToW(StringUtils::Format("\\\\.\\{}:", cDL));
-  HANDLE hDrive= CreateFile( strVolFormat.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                             NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   auto strRootFormat = ToW(StringUtils::Format("{}:\\", cDL));
-  if( ( hDrive != INVALID_HANDLE_VALUE || GetLastError() == NO_ERROR) &&
-    ( GetDriveType( strRootFormat.c_str() ) == DRIVE_CDROM ) )
+
+  if (GetDriveType(strRootFormat.c_str()) != DRIVE_CDROM)
+    return S_FALSE;
+
+  // Open the volume handle (\\.\D:) for filesystem-level operations
+  HANDLE hVolume = CreateFile(strVolFormat.c_str(), GENERIC_READ | GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+  if (hVolume == INVALID_HANDLE_VALUE)
+    return S_FALSE;
+
+  DWORD dwDummy;
+  dwReq = (GetDriveStatus(FromW(strVolFormat), true) == 1) ? IOCTL_STORAGE_LOAD_MEDIA
+                                                           : IOCTL_STORAGE_EJECT_MEDIA;
+  if (dwReq == IOCTL_STORAGE_EJECT_MEDIA)
   {
-    DWORD dwDummy;
-    dwReq = (GetDriveStatus(FromW(strVolFormat), true) == 1) ? IOCTL_STORAGE_LOAD_MEDIA : IOCTL_STORAGE_EJECT_MEDIA;
-    bRet = DeviceIoControl( hDrive, dwReq, NULL, 0, NULL, 0, &dwDummy, NULL);
+    // Resolve the raw device path (\\.\CdRomN) from the volume's device number
+    // while the volume handle is still live
+    STORAGE_DEVICE_NUMBER sdn = {};
+    HANDLE hDevice = INVALID_HANDLE_VALUE;
+    if (DeviceIoControl(hVolume, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &sdn, sizeof(sdn),
+                        &dwDummy, NULL))
+    {
+      auto strDevFormat = ToW(StringUtils::Format("\\\\.\\CdRom{}", sdn.DeviceNumber));
+      hDevice = CreateFile(strDevFormat.c_str(), GENERIC_READ | GENERIC_WRITE,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    }
+
+    // Lock the volume to flush pending I/O (failure is non-fatal)
+    DeviceIoControl(hVolume, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &dwDummy, NULL);
+
+    // Dismount the filesystem to cleanly detach it from the drive letter
+    DeviceIoControl(hVolume, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &dwDummy, NULL);
+
+    // Close volume handle — filesystem is now dismounted
+    CloseHandle(hVolume);
+    hVolume = INVALID_HANDLE_VALUE;
+
+    // Send eject to the raw storage device handle
+    if (hDevice != INVALID_HANDLE_VALUE)
+    {
+      bRet = DeviceIoControl(hDevice, IOCTL_STORAGE_EJECT_MEDIA, NULL, 0, NULL, 0, &dwDummy, NULL);
+      CloseHandle(hDevice);
+    }
   }
-  // Windows doesn't seem to send always DBT_DEVICEREMOVECOMPLETE
-  // unmount it here too as it won't hurt
-  if(dwReq == IOCTL_STORAGE_EJECT_MEDIA && bRet == 1)
+  else
+  {
+    // Load media (tray close): send directly to volume handle
+    bRet = DeviceIoControl(hVolume, IOCTL_STORAGE_LOAD_MEDIA, NULL, 0, NULL, 0, &dwDummy, NULL);
+    CloseHandle(hVolume);
+  }
+
+  // Windows doesn't always send DBT_DEVICEREMOVECOMPLETE — remove the source explicitly
+  if (dwReq == IOCTL_STORAGE_EJECT_MEDIA && bRet == 1)
   {
     CMediaSource share;
     share.strPath = StringUtils::Format("{}:", cDL);
     share.strName = share.strPath;
     CServiceBroker::GetMediaManager().RemoveAutoSource(share);
   }
-  CloseHandle(hDrive);
   return bRet? S_OK : S_FALSE;
 #endif
 }
