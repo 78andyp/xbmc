@@ -1063,14 +1063,22 @@ void CRenderManager::PrepareNextRender()
   // Renderers that hand frames to a hardware plane queue (VideoBypassesFramebuffer)
   // cannot take a released frame back: frames released without the latency during an
   // internal pause (caching, display reset) keep that lead and video stays ahead of audio.
+  const bool clockPaused = m_dvdClock.IsPaused();
   const bool isPaused =
-      m_dvdClock.IsPaused() && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
+      clockPaused && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
   double renderPts = frameOnScreen;
   if (!isPaused)
     renderPts += m_displayLatency;
 
-  const double nextFramePts =
-      m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
+  // GetClockSpeed() keeps reporting the last active speed while paused
+  // so must also check the clock pause state - otherwise a paused frame
+  // buffer that was recently rewinding never holds back on the current pts, and buffered
+  // frames get displayed as fast as they decode instead of waiting to be unpaused.
+  // Use clockPaused rather than isPaused, which is always false for renderers that
+  // bypass the framebuffer.
+  const double nextFramePts = (!clockPaused && m_dvdClock.GetClockSpeed() < 0)
+                                  ? renderPts
+                                  : m_Queue[m_queued.front()].pts;
 
   if (m_clockSync.m_enabled)
   {
