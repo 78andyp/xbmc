@@ -9587,7 +9587,7 @@ msgctxt "#16315"
 msgid "Lanczos3 - Fast"
 msgstr ""
 
-#. value for setting 'Create versions for similar videos'
+#. value for setting 'Create versions for similar videos' and 'Blu-ray playback mode'
 #: xbmc/games/dialogs/osd/DialogGameVideoFilter.cpp
 #: xbmc/video/dialogs/GUIDialogVideoSettings.cpp
 #: system/settings/settings.xml
@@ -17077,12 +17077,7 @@ msgctxt "#25017"
 msgid "No valid episode playlist has been found."
 msgstr ""
 
-#. Automatic menu
-#. Simple menu is shown only if playlist not identified automatically
-#: system/settings/settings.xml
-msgctxt "#25018"
-msgid "Automatic menu selection"
-msgstr ""
+#empty strings from id 25018 to 2018
 
 #. Bit rate unit of measure for the audio live bit rate info label (bits per second  / 1024)
 #: xbmc/guilib/guiinfo/PlayerGUIInfo.cpp
@@ -22698,7 +22693,7 @@ msgstr ""
 #. Description of setting #14102 Blu-ray playback mode
 #: system/settings/settings.xml
 msgctxt "#37031"
-msgid "Specifies how Blu-rays should be opened / played back. Note: Some disc menus are not fully supported and may cause problems."
+msgid "Specifies how Blu-rays should be opened / played back.[CR][Auto] Automatically determine and play the correct movie or episode playlist where possible, otherwise prompt using simple menu.[CR][Show simple menu] Alawys show simple menu for playlist selection.[CR][Show disc menu] Always show the on disc menu. Note: Some disc menus are not fully supported and may cause problems.[CR][Play main movie] Always play the longest playlist."
 msgstr ""
 
 #. Title of accessibility menu group

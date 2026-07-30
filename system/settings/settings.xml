@@ -466,7 +466,7 @@
           <default>0</default> <!-- default -->
           <constraints>
             <options>
-              <option label="25018">0</option> <!-- automatic menu selection -->
+              <option label="16316">0</option> <!-- auto -->
               <option label="14104">1</option> <!-- show simplified menu -->
               <option label="25003">2</option> <!-- show disc menu -->
               <option label="14103">3</option> <!-- play main movie -->
