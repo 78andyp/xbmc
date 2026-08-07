@@ -1869,9 +1869,12 @@ CVideoInfoScanner::~CVideoInfoScanner()
             CSettings::SETTING_MYVIDEOS_EXTRACTFLAGS) &&
         !movieDetails.HasStreamDetails())
     {
-      CDVDFileInfo::GetFileStreamDetails(pItem);
-      CLog::Log(LOGDEBUG, "VideoInfoScanner: Extracted filestream details from video file {}",
-                CURL::GetRedacted(path));
+      if (CDVDFileInfo::GetFileStreamDetails(pItem))
+        CLog::Log(LOGDEBUG, "VideoInfoScanner: Extracted filestream details from video file {}",
+                  CURL::GetRedacted(path));
+      else
+        CLog::Log(LOGDEBUG, "VideoInfoScanner: No filestream details extracted from video file {}",
+                  CURL::GetRedacted(path));
     }
 
     CLog::Log(LOGDEBUG, "VideoInfoScanner: Adding new item to {}:{}", content,
