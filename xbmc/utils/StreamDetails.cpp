@@ -619,10 +619,16 @@ StreamFlags CStreamDetails::GetSubtitleFlags(int idx) const
     return StreamFlags::FLAG_NONE;
 }
 
-int CStreamDetails::GetPreferredAudioStreamIndex(const std::string& language) const
+int CStreamDetails::GetPreferredAudioStreamIndex(
+    const StreamUtils::AudioPreferences& preferences) const
 {
-  if (language.empty())
-    return 0;
+  const auto asCandidate{[](const CStreamDetailAudio& audio)
+                         {
+                           return StreamUtils::AudioCandidate{.language = audio.m_strLanguage,
+                                                              .codec = audio.m_strCodec,
+                                                              .channels = audio.m_iChannels,
+                                                              .flags = audio.m_flags};
+                         }};
 
   int index{0};
   int bestIndex{0};
@@ -636,11 +642,11 @@ int CStreamDetails::GetPreferredAudioStreamIndex(const std::string& language) co
     index++;
 
     const auto* audio{static_cast<const CStreamDetailAudio*>(iter.get())};
-    if (!g_LangCodeExpander.CompareISO639Codes(audio->m_strLanguage, language))
-      continue;
 
-    if (!best || StreamUtils::CompareAudioQuality(audio->m_strCodec, audio->m_iChannels,
-                                                  best->m_strCodec, best->m_iChannels) > 0)
+    // Strictly better only, so that streams the preferences cannot separate keep the order the
+    // source presented them in (same stability std::stable_sort gives the player)
+    if (!best || StreamUtils::CompareAudioPreference(asCandidate(*audio), asCandidate(*best),
+                                                     preferences) > 0)
     {
       best = audio;
       bestIndex = index;
@@ -668,6 +674,25 @@ int CStreamDetails::GetFirstAudioChannels() const
 std::string CStreamDetails::GetFirstSubtitleLanguage() const
 {
   return GetSubtitleLanguage(1);
+}
+
+int CStreamDetails::GetDefaultAudioStreamIndex() const
+{
+  int index{0};
+
+  for (const auto& iter : m_vecItems)
+  {
+    if (iter->m_eType != CStreamDetail::AUDIO)
+      continue;
+
+    index++;
+
+    if (static_cast<const CStreamDetailAudio*>(iter.get())->m_flags & StreamFlags::FLAG_DEFAULT)
+      return index;
+  }
+
+  // The media nominates nothing, so the best listen it has to offer is the only answer left
+  return 0;
 }
 
 void CStreamDetails::Archive(CArchive& ar)
