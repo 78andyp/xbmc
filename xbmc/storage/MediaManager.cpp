@@ -486,13 +486,55 @@ DriveState CMediaManager::GetDriveStatus(const std::string& devicePath)
   if (!m_bOpticalDrivePresent || !m_platformDiscDriveHander)
     return DriveState::NOT_READY;
 
-  std::string translatedDevicePath = TranslateDevicePath(devicePath, true);
-  return m_platformDiscDriveHander->GetDriveState(translatedDevicePath);
+  const std::string translatedDevicePath{TranslateDevicePath(devicePath, true)};
+
+  // SYSTEM_MEDIA_DVD, SYSTEM_DVDREADY and SYSTEM_TRAYOPEN are evaluated by the GUI on every
+  // frame while a skin exposes them, so answer from what was last seen. Everything that can
+  // change a drive's state clears this first - see ResetDriveStatusCache()
+  {
+    std::unique_lock lock(m_driveStatusSection);
+    const auto it{m_driveStatusCache.find(translatedDevicePath)};
+    if (it != m_driveStatusCache.end())
+      return it->second;
+  }
+
+  // Deliberately queried without holding m_driveStatusSection - this can block for seconds on a
+  // drive that is spinning up, and no other caller should have to wait behind it.
+  const DriveState state{m_platformDiscDriveHander->GetDriveState(translatedDevicePath)};
+
+  {
+    std::unique_lock lock(m_driveStatusSection);
+    m_driveStatusCache.insert_or_assign(translatedDevicePath, state);
+
+    const auto logged{m_driveStatusLogged.find(translatedDevicePath)};
+    if (logged == m_driveStatusLogged.end() || logged->second != state)
+    {
+      m_driveStatusLogged.insert_or_assign(translatedDevicePath, state);
+      CLog::LogF(LOGDEBUG, "Drive {} state is now {}", translatedDevicePath,
+                 static_cast<int>(state));
+    }
+  }
+
+  return state;
 #else
   return MEDIA_DETECT::CDetectDVDMedia::GetDriveState();
 #endif
 #else
   return DriveState::NOT_READY;
+#endif
+}
+
+void CMediaManager::ResetDriveStatusCache(const std::string& devicePath)
+{
+#if defined(TARGET_WINDOWS) && defined(HAS_OPTICAL_DRIVE)
+  const std::string translatedDevicePath{devicePath.empty() ? std::string{}
+                                                           : TranslateDevicePath(devicePath, true)};
+
+  std::unique_lock lock(m_driveStatusSection);
+  if (translatedDevicePath.empty())
+    m_driveStatusCache.clear();
+  else
+    m_driveStatusCache.erase(translatedDevicePath);
 #endif
 }
 
@@ -703,8 +745,14 @@ std::shared_ptr<IDiscDriveHandler> CMediaManager::GetDiscDriveHandler()
 
 void CMediaManager::SetHasOpticalDrive(bool bstatus)
 {
-  std::unique_lock waitLock(m_muAutoSource);
-  m_bOpticalDrivePresent = bstatus;
+  bool changed{false};
+  {
+    std::unique_lock waitLock(m_muAutoSource);
+    changed = m_bOpticalDrivePresent != bstatus;
+    m_bOpticalDrivePresent = bstatus;
+  }
+  if (changed)
+    ResetDriveStatusCache();
 }
 
 bool CMediaManager::Eject(const std::string& mountpath)
@@ -713,7 +761,9 @@ bool CMediaManager::Eject(const std::string& mountpath)
 #ifdef HAVE_LIBBLURAY
   m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-  return m_platformStorage->Eject(mountpath);
+  const bool ejected{m_platformStorage->Eject(mountpath)};
+  ResetDriveStatusCache(mountpath);
+  return ejected;
 }
 
 void CMediaManager::EjectTray( const bool bEject, const char cDriveLetter )
@@ -724,7 +774,9 @@ void CMediaManager::EjectTray( const bool bEject, const char cDriveLetter )
 #ifdef HAVE_LIBBLURAY
     m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-    m_platformDiscDriveHander->EjectDriveTray(TranslateDevicePath(""));
+    const std::string devicePath{TranslateDevicePath("")};
+    m_platformDiscDriveHander->EjectDriveTray(devicePath);
+    ResetDriveStatusCache(devicePath);
   }
 #endif
 }
@@ -737,7 +789,9 @@ void CMediaManager::CloseTray(const char cDriveLetter)
 #ifdef HAVE_LIBBLURAY
     m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-    m_platformDiscDriveHander->ToggleDriveTray(TranslateDevicePath(""));
+    const std::string devicePath{TranslateDevicePath("")};
+    m_platformDiscDriveHander->ToggleDriveTray(devicePath);
+    ResetDriveStatusCache(devicePath);
   }
 #endif
 }
@@ -750,7 +804,9 @@ void CMediaManager::ToggleTray(const char cDriveLetter)
 #ifdef HAVE_LIBBLURAY
     m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-    m_platformDiscDriveHander->ToggleDriveTray(TranslateDevicePath(""));
+    const std::string devicePath{TranslateDevicePath("")};
+    m_platformDiscDriveHander->ToggleDriveTray(devicePath);
+    ResetDriveStatusCache(devicePath);
   }
 #endif
 }
@@ -767,13 +823,21 @@ void CMediaManager::ProcessEvents()
     // so we have to refresh m_strFirstAvailDrive when this happens after Initialize
     // was called (e.x. the disc was inserted after the start of xbmc)
     // else TranslateDevicePath wouldn't give the correct device
-    m_strFirstAvailDrive = m_platformStorage->GetFirstOpticalDeviceFileName();
+    {
+      const std::string firstDrive{m_platformStorage->GetFirstOpticalDeviceFileName()};
+      std::unique_lock waitLock(m_muAutoSource);
+      m_strFirstAvailDrive = firstDrive;
+    }
 #elif defined(TARGET_WINDOWS)
     // On Windows, virtual drives can appear or disappear at any time.
     // Re-scan to get the current state of optical drives and update
     // m_bhasoptical and m_strFirstAvailDrive accordingly.
-    m_strFirstAvailDrive = m_platformStorage->GetFirstOpticalDeviceFileName();
-    SetHasOpticalDrive(!m_strFirstAvailDrive.empty());
+    const std::string firstDrive{m_platformStorage->GetFirstOpticalDeviceFileName()};
+    {
+      std::unique_lock waitLock(m_muAutoSource);
+      m_strFirstAvailDrive = firstDrive;
+    }
+    SetHasOpticalDrive(!firstDrive.empty());
 #endif
 #endif
 
@@ -816,13 +880,17 @@ void CMediaManager::AddOpticalSource(const std::string& devicePath)
 
 void CMediaManager::OnStorageAdded(const MEDIA_DETECT::STORAGE::StorageDevice& device)
 {
+  ResetDriveStatusCache(device.path);
 #ifdef HAS_OPTICAL_DRIVE
   if (device.type == MEDIA_DETECT::STORAGE::Type::OPTICAL)
   {
 #ifdef TARGET_WINDOWS
     SetHasOpticalDrive(true); // In case drive appeared after startup (eg. virtual drive)
-    if (m_strFirstAvailDrive.empty())
-      m_strFirstAvailDrive = device.path;
+    {
+      std::unique_lock waitLock(m_muAutoSource);
+      if (m_strFirstAvailDrive.empty())
+        m_strFirstAvailDrive = device.path;
+    }
     AddOpticalSource(device.path);
 #endif
 
@@ -905,6 +973,7 @@ void CMediaManager::OnStorageAdded(const MEDIA_DETECT::STORAGE::StorageDevice& d
 
 void CMediaManager::OnStorageSafelyRemoved(const MEDIA_DETECT::STORAGE::StorageDevice& device)
 {
+  ResetDriveStatusCache(device.path);
 #ifdef TARGET_WINDOWS
   if (device.type == MEDIA_DETECT::STORAGE::Type::OPTICAL)
   {
@@ -922,6 +991,7 @@ void CMediaManager::OnStorageSafelyRemoved(const MEDIA_DETECT::STORAGE::StorageD
 
 void CMediaManager::OnStorageUnsafelyRemoved(const MEDIA_DETECT::STORAGE::StorageDevice& device)
 {
+  ResetDriveStatusCache(device.path);
 #ifdef TARGET_WINDOWS
   if (device.type == MEDIA_DETECT::STORAGE::Type::OPTICAL)
   {
