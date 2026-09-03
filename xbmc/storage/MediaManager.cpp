@@ -421,6 +421,19 @@ std::string CMediaManager::TranslateDevicePath(const std::string& devicePath, bo
   return strDevice;
 }
 
+#ifdef HAS_OPTICAL_DRIVE
+std::string CMediaManager::TranslateDriveLetter(const char cDriveLetter)
+{
+#ifdef TARGET_WINDOWS
+  // A drive letter only identifies a drive on Windows. Elsewhere the device path is not
+  // letter based and callers always leave cDriveLetter at its default.
+  if (cDriveLetter != '\0')
+    return TranslateDevicePath(StringUtils::Format("{}:", cDriveLetter));
+#endif
+  return TranslateDevicePath("");
+}
+#endif
+
 bool CMediaManager::IsDiscInDrive(const std::string& devicePath)
 {
 #ifdef HAS_OPTICAL_DRIVE
@@ -800,9 +813,12 @@ void CMediaManager::EjectTray( const bool bEject, const char cDriveLetter )
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
   {
-    ResetBlurayPlaylistStatus();
-    const std::string devicePath{TranslateDevicePath("")};
-    m_platformDiscDriveHander->EjectDriveTray(devicePath);
+    const std::string devicePath{TranslateDriveLetter(cDriveLetter)};
+    ResetBlurayPlaylistStatus(devicePath);
+    if (bEject)
+      m_platformDiscDriveHander->EjectDriveTray(devicePath);
+    else
+      m_platformDiscDriveHander->CloseDriveTray(devicePath);
     ResetDriveStatusCache(devicePath);
   }
 #endif
@@ -813,9 +829,9 @@ void CMediaManager::CloseTray(const char cDriveLetter)
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
   {
-    ResetBlurayPlaylistStatus();
-    const std::string devicePath{TranslateDevicePath("")};
-    m_platformDiscDriveHander->ToggleDriveTray(devicePath);
+    const std::string devicePath{TranslateDriveLetter(cDriveLetter)};
+    ResetBlurayPlaylistStatus(devicePath);
+    m_platformDiscDriveHander->CloseDriveTray(devicePath);
     ResetDriveStatusCache(devicePath);
   }
 #endif
@@ -826,8 +842,8 @@ void CMediaManager::ToggleTray(const char cDriveLetter)
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
   {
-    ResetBlurayPlaylistStatus();
-    const std::string devicePath{TranslateDevicePath("")};
+    const std::string devicePath{TranslateDriveLetter(cDriveLetter)};
+    ResetBlurayPlaylistStatus(devicePath);
     m_platformDiscDriveHander->ToggleDriveTray(devicePath);
     ResetDriveStatusCache(devicePath);
   }
