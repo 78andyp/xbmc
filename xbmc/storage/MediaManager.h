@@ -168,7 +168,16 @@ private:
 #endif
 
   void RemoveDiscInfo(const std::string& devicePath);
+
+  /*! \brief Discard everything cached about the disc currently believed to be in a drive
+   * Covers the CD info, the disc info (and with it the bluray disc cache) and the removable
+   * bluray playlist status. Call when the disc in the drive may have been swapped.
+   * \param devicePath The optical drive path
+   */
+  void InvalidateDiscInfo(const std::string& devicePath);
+
   std::map<std::string, UTILS::DISCS::DiscInfo> m_mapDiscInfo;
+  std::map<std::string, std::string> m_volumeLabel;
 #if defined(TARGET_WINDOWS) && defined(HAS_OPTICAL_DRIVE)
   /*! Last known state of each optical drive, to keep the GUI off the hardware - see GetDriveStatus */
   std::map<std::string, DriveState> m_driveStatusCache;
