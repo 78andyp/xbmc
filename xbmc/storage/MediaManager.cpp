@@ -519,7 +519,7 @@ void CMediaManager::InvalidateDiscInfo(const std::string& devicePath)
   RemoveCdInfo(devicePath);
   // Also clears the bluray disc cache for this drive
   RemoveDiscInfo(devicePath);
-  ResetBlurayPlaylistStatus();
+  ResetBlurayPlaylistStatus(devicePath);
   {
     std::unique_lock lock(m_muAutoSource);
     m_volumeLabel.erase(TranslateDevicePath(devicePath));
@@ -698,32 +698,51 @@ bool CMediaManager::HasMediaBlurayPlaylist(const std::string& devicePath)
 #ifdef HAVE_LIBBLURAY
   // When the disc node is displayed, this gets called by the GUI via SYSTEM_MEDIA_BLURAY_PLAYLIST
   // in CSystemCGUIInfo at every refresh - so cache result until eject.
-  if (m_hasBlurayPlaylist != HasBlurayPlaylist::UNKNOWN)
-    return m_hasBlurayPlaylist == HasBlurayPlaylist::YES;
-
   const std::string mediaPath{TranslateDevicePath(devicePath)};
+
+  {
+    std::unique_lock lock(m_muAutoSource);
+    const auto cached{m_blurayPlaylist.find(mediaPath)};
+    if (cached != m_blurayPlaylist.end() && cached->second != HasBlurayPlaylist::UNKNOWN)
+      return cached->second == HasBlurayPlaylist::YES;
+  }
+
+  HasBlurayPlaylist status{HasBlurayPlaylist::NO};
   UTILS::DISCS::DiscInfo info{GetDiscInfo(mediaPath)};
   if (!info.empty() && info.type == UTILS::DISCS::DiscType::BLURAY)
   {
-    const std::string blurayPath{GetDiskUniqueId()};
+    const std::string blurayPath{GetDiskUniqueId(devicePath)};
     CVideoDatabase db;
     if (db.Open())
     {
       const std::string path{db.GetRemovableBlurayPath(blurayPath)};
       db.Close();
-      m_hasBlurayPlaylist = path.empty() ? HasBlurayPlaylist::NO : HasBlurayPlaylist::YES;
-      return !path.empty();
+      status = path.empty() ? HasBlurayPlaylist::NO : HasBlurayPlaylist::YES;
     }
   }
-  m_hasBlurayPlaylist = HasBlurayPlaylist::NO;
-#endif
+
+  {
+    std::unique_lock lock(m_muAutoSource);
+    m_blurayPlaylist.insert_or_assign(mediaPath, status);
+  }
+
+  return status == HasBlurayPlaylist::YES;
+#else
   return false;
+#endif
 }
 
-void CMediaManager::ResetBlurayPlaylistStatus()
+void CMediaManager::ResetBlurayPlaylistStatus(const std::string& devicePath)
 {
 #ifdef HAVE_LIBBLURAY
-  m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
+  const std::string mediaPath{devicePath.empty() ? std::string{}
+                                                 : TranslateDevicePath(devicePath)};
+
+  std::unique_lock lock(m_muAutoSource);
+  if (mediaPath.empty())
+    m_blurayPlaylist.clear();
+  else
+    m_blurayPlaylist.erase(mediaPath);
 #endif
 }
 
@@ -768,8 +787,8 @@ void CMediaManager::SetHasOpticalDrive(bool bstatus)
 bool CMediaManager::Eject(const std::string& mountpath)
 {
   std::unique_lock lock(m_CritSecStorageProvider);
-#ifdef HAVE_LIBBLURAY
-  m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
+#ifdef HAS_OPTICAL_DRIVE
+  ResetBlurayPlaylistStatus(mountpath);
 #endif
   const bool ejected{m_platformStorage->Eject(mountpath)};
   ResetDriveStatusCache(mountpath);
@@ -781,9 +800,7 @@ void CMediaManager::EjectTray( const bool bEject, const char cDriveLetter )
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
   {
-#ifdef HAVE_LIBBLURAY
-    m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
-#endif
+    ResetBlurayPlaylistStatus();
     const std::string devicePath{TranslateDevicePath("")};
     m_platformDiscDriveHander->EjectDriveTray(devicePath);
     ResetDriveStatusCache(devicePath);
@@ -796,9 +813,7 @@ void CMediaManager::CloseTray(const char cDriveLetter)
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
   {
-#ifdef HAVE_LIBBLURAY
-    m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
-#endif
+    ResetBlurayPlaylistStatus();
     const std::string devicePath{TranslateDevicePath("")};
     m_platformDiscDriveHander->ToggleDriveTray(devicePath);
     ResetDriveStatusCache(devicePath);
@@ -811,9 +826,7 @@ void CMediaManager::ToggleTray(const char cDriveLetter)
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
   {
-#ifdef HAVE_LIBBLURAY
-    m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
-#endif
+    ResetBlurayPlaylistStatus();
     const std::string devicePath{TranslateDevicePath("")};
     m_platformDiscDriveHander->ToggleDriveTray(devicePath);
     ResetDriveStatusCache(devicePath);

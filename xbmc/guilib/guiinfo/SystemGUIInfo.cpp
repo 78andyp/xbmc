@@ -530,9 +530,18 @@ bool CSystemGUIInfo::GetBool(bool& value,
 #endif
     case SYSTEM_MEDIA_BLURAY_PLAYLIST:
 #if defined(HAS_OPTICAL_DRIVE) && defined(HAVE_LIBBLURAY)
-      if (CServiceBroker::GetMediaManager().IsDiscInDrive())
+    {
+      std::string devicePath;
+      if (gitem && gitem->IsFileItem())
       {
-        value = CServiceBroker::GetMediaManager().HasMediaBlurayPlaylist();
+        const auto* item{static_cast<const CFileItem*>(gitem)};
+        if (item->IsDVD())
+          devicePath = item->GetPath();
+      }
+
+      if (CServiceBroker::GetMediaManager().IsDiscInDrive(devicePath))
+      {
+        value = CServiceBroker::GetMediaManager().HasMediaBlurayPlaylist(devicePath);
       }
       else
 #endif
@@ -540,6 +549,7 @@ bool CSystemGUIInfo::GetBool(bool& value,
         value = false;
       }
       return true;
+    }
     case SYSTEM_CAN_POWERDOWN:
       value = CServiceBroker::GetPowerManager().CanPowerdown();
       return true;
