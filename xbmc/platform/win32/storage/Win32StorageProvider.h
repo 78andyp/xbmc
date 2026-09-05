@@ -12,6 +12,7 @@
 #include "threads/CriticalSection.h"
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -56,9 +57,8 @@ public:
 
   /*! \brief Called from the windowing thread to queue a change
    *
-   * Optical media changes can reach us over both WM_DEVICECHANGE and the shell's
-   * WM_MEDIA_CHANGE. A change matching the last one queued for the same drive is dropped,
-   * until ForgetLastEvent() says otherwise.
+   * Optical media changes can reach us over more than one channel. A change matching the last
+   * one queued for the same drive is dropped, until ForgetLastEvent() says otherwise.
    * \sa ForgetLastEvent
    */
   static void QueueStorageEvent(StorageEventType type,
@@ -68,6 +68,22 @@ public:
    * \param devicePath The drive path, as it appears in the events queued for it
    */
   static void ForgetLastEvent(const std::string& devicePath);
+
+  /*! \brief Note that a drive has reported media arriving
+   *
+   * The drive reports this before the volume is mounted, so nothing is queued until the mount
+   * follows. \sa ConfirmOpticalArrival
+   * \param devicePath The drive path (e.g. "D:")
+   */
+  static void NoteOpticalArrival(const std::string& devicePath);
+
+  /*! \brief Whether a volume mount on a drive follows an arrival it reported
+   *
+   * A drive also reports a mount for every attempt to read it while empty, so a mount only counts
+   * as an arrival when the drive has announced one since its last removal.
+   * \param devicePath The drive path (e.g. "D:")
+   */
+  static bool ConfirmOpticalArrival(const std::string& devicePath);
 
   static void SetEvent() { xbevent = true; }
   static bool xbevent;
@@ -88,5 +104,7 @@ private:
 
   inline static std::vector<StorageEvent> m_events;
   inline static std::map<std::string, StorageEventType> m_lastQueuedEvent;
+  /*! Drives that have reported media arriving and whose volume has yet to mount */
+  inline static std::set<std::string> m_arrivingDrives;
   inline static CCriticalSection m_eventsSection;
 };

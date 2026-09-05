@@ -427,7 +427,25 @@ void CWin32StorageProvider::QueueStorageEvent(StorageEventType type,
   }
 
   m_lastQueuedEvent.insert_or_assign(device.path, type);
+  m_arrivingDrives.erase(device.path);
   m_events.emplace_back(StorageEvent{type, device});
+}
+
+void CWin32StorageProvider::NoteOpticalArrival(const std::string& devicePath)
+{
+  std::unique_lock lock(m_eventsSection);
+
+  const auto last{m_lastQueuedEvent.find(devicePath)};
+  if (last != m_lastQueuedEvent.end() && last->second == StorageEventType::ADDED)
+    return;
+
+  m_arrivingDrives.insert(devicePath);
+}
+
+bool CWin32StorageProvider::ConfirmOpticalArrival(const std::string& devicePath)
+{
+  std::unique_lock lock(m_eventsSection);
+  return m_arrivingDrives.erase(devicePath) != 0;
 }
 
 bool CWin32StorageProvider::PumpDriveChangeEvents(IStorageEventsCallback* callback)
