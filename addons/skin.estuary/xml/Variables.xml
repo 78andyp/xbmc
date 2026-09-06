@@ -106,13 +106,13 @@
 		<value condition="Container.SortMethod(7) | Container.SortMethod(29)">$INFO[ListItem.Year]</value>
 		<value condition="!String.isempty(ListItem.Appearances)">$LOCALIZE[38026]: $INFO[ListItem.Appearances]</value>
 		<value condition="Window.IsActive(musicplaylist) | Window.IsActive(videoplaylist)">$INFO[ListItem.Duration]</value>
-		<value condition="$EXP[videoasset_true] + Container.SortMethod(1)">$VAR[FirstLanguagesVar]</value>
-		<value condition="$EXP[videoasset_true] + Container.SortMethod(9) + Control.IsVisible(504)">$VAR[FirstLanguagesVar]</value>
-		<value condition="$EXP[videoasset_true] + Container.SortMethod(9) + !Control.IsVisible(504)">$INFO[ListItem.Duration]$VAR[FirstLanguagesVar, | ]</value>
-		<value condition="$EXP[videoasset_true] + Container.SortMethod(32)">$INFO[ListItem.VideoResolution]$VAR[VideoResolutionTypeVar, ]$VAR[FirstLanguagesVar, | ]</value>
-		<value condition="$EXP[videoasset_true] + Container.SortMethod(33)">$VAR[VideoCodecVar]$VAR[FirstLanguagesVar, | ]</value>
-		<value condition="$EXP[videoasset_true] + Container.SortMethod(36)">$VAR[AudioCodecVar]$VAR[FirstLanguagesVar, | ]</value>
-		<value condition="$EXP[videoasset_true]">$VAR[FirstLanguagesVar]</value>
+		<value condition="$EXP[videoasset_true] + Container.SortMethod(1)">$VAR[VideoAssetFirstLanguagesVar]</value>
+		<value condition="$EXP[videoasset_true] + Container.SortMethod(9) + Control.IsVisible(504)">$VAR[VideoAssetFirstLanguagesVar]</value>
+		<value condition="$EXP[videoasset_true] + Container.SortMethod(9) + !Control.IsVisible(504)">$INFO[ListItem.Duration]$VAR[VideoAssetFirstLanguagesVar, | ]</value>
+		<value condition="$EXP[videoasset_true] + Container.SortMethod(32)">$INFO[ListItem.VideoResolution]$VAR[VideoResolutionTypeVar, ]$VAR[VideoAssetFirstLanguagesVar, | ]</value>
+		<value condition="$EXP[videoasset_true] + Container.SortMethod(33)">$VAR[VideoCodecVar]$VAR[VideoAssetFirstLanguagesVar, | ]</value>
+		<value condition="$EXP[videoasset_true] + Container.SortMethod(36)">$VAR[AudioCodecVar]$VAR[VideoAssetFirstLanguagesVar, | ]</value>
+		<value condition="$EXP[videoasset_true]">$VAR[VideoAssetFirstLanguagesVar]</value>
 		<value condition="Container.SortMethod(9)">$INFO[ListItem.Duration]</value>
 		<value>$INFO[ListItem.Label2]</value>
 	</variable>
@@ -933,6 +933,10 @@
 	</variable>
 	<variable name="VideoManagerFirstLanguagesVar">
 		<value condition="Window.IsVisible(managevideoversions) | Window.IsVisible(managevideoextras)">$VAR[FirstLanguagesVar, | ]</value>
+	</variable>
+	<!-- The languages of the media default stream, shown under the duration in the versions library only where either the audio or subtitle language differs from that displayed under the version  -->
+	<variable name="VideoAssetFirstLanguagesVar">
+		<value condition="!System.Setting(languagedetailsdefault) + [!String.IsEqual(ListItem.FirstAudioLanguage,ListItem.AudioLanguage) | !String.IsEqual(ListItem.FirstSubtitleLanguage,ListItem.SubtitleLanguage)]">$VAR[FirstLanguagesVar]</value>
 	</variable>
 	<variable name="PVRInstanceName">
 		<value condition="Integer.IsGreater(PVR.ClientCount,1)">$INFO[ListItem.PVRClientName,[COLOR grey]$LOCALIZE[31137]:[/COLOR] ,]$INFO[ListItem.PVRInstanceName, (,)]</value>

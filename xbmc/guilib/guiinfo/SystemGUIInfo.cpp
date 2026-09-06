@@ -703,6 +703,13 @@ bool CSystemGUIInfo::GetBool(bool& value,
                                setting, CSettings::VIDEOLIBRARY_THUMB_SHOW_UNWATCHED_EPISODE);
         return true;
       }
+      else if (StringUtils::EqualsNoCase(info.GetData3(), "languagedetailsdefault"))
+      {
+        value = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+                    CSettings::SETTING_VIDEOLIBRARY_LANGUAGEDETAILS) ==
+                CSettings::VIDEOLIBRARY_LANGUAGE_DETAILS_DEFAULT;
+        return true;
+      }
       break;
     }
     default:

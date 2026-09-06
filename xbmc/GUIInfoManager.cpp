@@ -2157,6 +2157,17 @@ constexpr std::array<InfoMap, 76> system_labels = {{
 ///     @skinning_v20 **[New Boolean Condition]** \link System_Setting_HideUnwatchedEpisodeThumbs `System.Setting(hideunwatchedepisodethumbs)`\endlink
 ///     <p>
 ///   }
+///   \table_row3{   <b>`System.Setting(languagedetailsdefault)`</b>,
+///                  \anchor System_Setting_LanguageDetailsDefault
+///                  _boolean_,
+///     @return **True** if 'Language details to display' is set to 'Default'\, ie. the audio
+///     language\, codec and channel count shown against a library item describe the stream the
+///     media itself nominates. **False** when they describe the stream that will be played or the
+///     technically best one.
+///     <p><hr>
+///     @skinning_v22 **[New Boolean Condition]** \link System_Setting_LanguageDetailsDefault `System.Setting(languagedetailsdefault)`\endlink
+///     <p>
+///   }
 /// \table_end
 /// @todo Some values are hardcoded in the middle of the code  - refactor to make it easier to track
 ///
