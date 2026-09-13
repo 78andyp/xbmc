@@ -1253,7 +1253,13 @@ CVideoInfoScanner::~CVideoInfoScanner()
       if (CDiscDirectoryHelper::GetOrShowPlaylistSelection(*item, items, MenuDecision::SILENT) &&
           !items.IsEmpty())
         *item = *items[0];
+      return;
     }
+
+    // The playlist known (ie. refresh)
+    // Episodes are excluded as several can share a playlist
+    if (item->GetVideoInfoTag()->m_iEpisode < 0)
+      CDiscDirectoryHelper::ReadResolvedPlaylist(*item);
   }
 
   // An edition extracted from the filename is applied only when an asset title hasn't been set yet (NFO wins).
