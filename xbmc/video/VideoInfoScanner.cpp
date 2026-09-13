@@ -1129,7 +1129,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
       const size_t part{partIndex++};
 
       // Only resolve blurays
-      if (!IsBluray(path))
+      const bool playlistChosen{URIUtils::GetBlurayPlaylistFromPath(path) > -1};
+      if (!IsBluray(path) && !playlistChosen)
       {
         fileParts.emplace_back(part);
         playlistPaths.emplace_back(path);
@@ -1140,10 +1141,20 @@ CVideoInfoScanner::~CVideoInfoScanner()
       partItem.SetPath(path);
       partItem.SetDynPath(path);
 
-      // Updates partItem in place to its main playlist
-      CFileItemList partItems;
-      ResolveBlurayPlaylist(&partItem, partItems);
-      if (partItems.IsEmpty())
+      // Updates partItem in place to its main playlist, or to the details of the playlist already
+      // chosen for it (ie. refresh). Each part keeps its own playlist, as the durations below are
+      // what the stack times are built from.
+      bool resolved;
+      if (playlistChosen)
+        resolved = CDiscDirectoryHelper::ReadResolvedPlaylist(partItem);
+      else
+      {
+        CFileItemList partItems;
+        ResolveBlurayPlaylist(&partItem, partItems);
+        resolved = !partItems.IsEmpty();
+      }
+
+      if (!resolved)
       {
         CLog::LogF(LOGERROR, "Unable to resolve a bluray playlist for {} of {}",
                    CURL::GetRedacted(path), CURL::GetRedacted(originalPath));
