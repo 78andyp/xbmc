@@ -81,6 +81,10 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
   if (m_item == nullptr)
     return false;
 
+  CLog::Log(LOGDEBUG,
+            "CVideoLibraryRefreshingJob: refreshing '{}' (ignore nfo: {}, refresh all: {})",
+            CURL::GetRedacted(m_item->GetPath()), m_ignoreNfo, m_refreshAll);
+
   // determine the scraper for the item's path
   VIDEO::SScanSettings scanSettings;
   ScraperPtr scraper = db.GetScraperForPath(m_item->GetPath(), scanSettings);
