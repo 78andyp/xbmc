@@ -1257,9 +1257,10 @@ CVideoInfoScanner::~CVideoInfoScanner()
     }
 
     // The playlist known (ie. refresh)
-    // Episodes are excluded as several can share a playlist
     if (item->GetVideoInfoTag()->m_iEpisode < 0)
       CDiscDirectoryHelper::ReadResolvedPlaylist(*item);
+    else
+      CDiscDirectoryHelper::ReadEpisodePlaylist(*item);
   }
 
   // An edition extracted from the filename is applied only when an asset title hasn't been set yet (NFO wins).
