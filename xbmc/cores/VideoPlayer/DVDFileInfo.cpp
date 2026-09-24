@@ -65,7 +65,9 @@ bool CDVDFileInfo::GetFileDuration(const std::string &path, int& duration)
   if (!input)
     return false;
 
-  if (!input->Open())
+  // A DVD can only be read through a navigator driven by a player, and the title that would give
+  // a meaningful duration is not known here anyway
+  if (input->IsStreamType(DVDSTREAM_TYPE_DVD) || !input->Open())
     return false;
 
   demux.reset(CDVDFactoryDemuxer::CreateDemuxer(input, true));
