@@ -1588,19 +1588,18 @@ CVideoInfoScanner::~CVideoInfoScanner()
     //! available filesystem characters. ex. "directors cut" in file name vs "Director's Cut"
     std::string editionFromFilename{filenameAttributes.GetEdition()};
 
-    // Neither a disc nor a stack may have a filename that says anything about the movie, so when
-    // each movie is in its own folder the edition is taken from the folder name instead - either
-    // as an attribute pair (ex. "[edition=Director's Cut]") or, failing that, as an edition name
-    // spelt out in the folder name itself
-    if (const std::string & path{pItem->GetPath()}; editionFromFilename.empty() &&
-                                                    (bDirNames || m_useFolderNames) &&
-                                                    (URIUtils::IsStack(path) || IsDisc(path)))
+    // When each movie is in its own folder an edition the filename doesn't give is taken from the
+    // folder name instead, as an attribute pair (ex. "[edition=Director's Cut]"). Neither a disc
+    // nor a stack may have a filename that says anything about the movie, so for those an edition
+    // name spelt out in the folder name itself is also looked for.
+    if (const bool discOrStack{URIUtils::IsStack(pItem->GetPath()) || IsDisc(pItem->GetPath())};
+        editionFromFilename.empty() && (bDirNames || (m_useFolderNames && discOrStack)))
     {
       if (const std::string folderName{pItem->GetMovieName(true)}; !folderName.empty())
       {
         const CFilenameAttributes folderAttributes(folderName, &m_regexpCache);
         editionFromFilename = folderAttributes.GetEdition();
-        if (editionFromFilename.empty())
+        if (editionFromFilename.empty() && discOrStack)
           editionFromFilename = GetEditionFromFolderName(folderName);
       }
     }

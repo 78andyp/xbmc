@@ -669,6 +669,26 @@ TEST_F(TestVideoInfoScanner, AnEditionInTheFileNameNamesTheMoviesVersion)
   EXPECT_EQ("Director's Cut", m_db.GetVideoVersionInfo(movie).m_assetTypeName);
 }
 
+TEST_F(TestVideoInfoScanner, AnEditionInTheFolderNameNamesTheMoviesVersion)
+{
+  const std::string folder{Folder(m_root, "Film (2010) {edition=Director's Cut}")};
+  const std::string movie{FolderMovie(folder, "movie.mkv")};
+
+  Scan();
+
+  EXPECT_EQ("Director's Cut", m_db.GetVideoVersionInfo(movie).m_assetTypeName);
+}
+
+TEST_F(TestVideoInfoScanner, AnEditionInTheFileNameWinsOverOneInTheFolderName)
+{
+  const std::string folder{Folder(m_root, "Film (2010) {edition=Director's Cut}")};
+  const std::string movie{FolderMovie(folder, "Film (2010) {edition=Extended Edition}.mkv")};
+
+  Scan();
+
+  EXPECT_EQ("Extended Edition", m_db.GetVideoVersionInfo(movie).m_assetTypeName);
+}
+
 // Movies looked up with a scraper
 
 TEST_F(TestVideoInfoScanner, AMovieIsAddedFromTheScraper)
