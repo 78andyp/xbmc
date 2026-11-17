@@ -40,7 +40,6 @@
 #include "video/FilenameAttributes.h"
 #include "video/VideoDatabase.h"
 #include "video/VideoFileItemClassify.h"
-#include "video/VideoInfoDownloader.h"
 #include "video/VideoInfoScanner.h"
 #include "video/VideoThumbLoader.h"
 #include "video/dialogs/GUIDialogVideoManagerVersions.h"
@@ -187,20 +186,23 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
             scraper = db.GetScraperForPath(movie->GetDynPath(), scanSettings);
             if (!scraper)
               continue;
-            CVideoInfoDownloader infoDownloader{scraper};
-            MOVIELIST itemResultList;
-            infoDownloader.FindMovie(movie->GetVideoInfoTag()->GetTitle(),
-                                     movie->GetVideoInfoTag()->GetYear(), itemResultList);
-            if (!itemResultList.empty())
+            std::vector<CScraperUrl> itemResultList;
+            try
             {
-              CScraper::UniqueIDs uniqueIDs;
-              if (infoDownloader.GetDetails(uniqueIDs, itemResultList.at(0), tag) &&
-                  tag.m_set.HasTitle())
-              {
-                onlineFound = true;
-                if (overview.empty())
-                  overview = tag.m_set.GetOverview();
-              }
+              itemResultList = scraper->FindMovie(movie->GetVideoInfoTag()->GetTitle(),
+                                                  movie->GetVideoInfoTag()->GetYear());
+            }
+            catch (const CScraperError&)
+            {
+              // a search that fails finds nothing for the set
+            }
+            if (!itemResultList.empty() &&
+                scraper->GetVideoDetails({}, itemResultList.at(0), true /*fMovie*/, tag) &&
+                tag.m_set.HasTitle())
+            {
+              onlineFound = true;
+              if (overview.empty())
+                overview = tag.m_set.GetOverview();
             }
           }
         }
@@ -379,8 +381,9 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
     // Without anyone to choose from what a search finds, a movie or tv show is looked up by the ids
     // it already has, as a search by its title may find another or nothing
     CScraper::UniqueIDs uniqueIDs;
-    if (lookUpByIds && !hasDetails && !IsModal() && m_searchTitle.empty() && scraper->IsPython() &&
-        (scraper->Content() == ADDON::ContentType::MOVIES || isTvShow) && m_item->HasVideoInfoTag())
+    if (lookUpByIds && !hasDetails && !IsModal() && m_searchTitle.empty() &&
+        !scraper->IsLocalOnly() && (scraper->Content() == ADDON::ContentType::MOVIES || isTvShow) &&
+        m_item->HasVideoInfoTag())
     {
       for (const auto& [type, value] : m_item->GetVideoInfoTag()->GetUniqueIDs())
       {
@@ -396,11 +399,8 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       SetText(itemTitle);
       SetProgress(0);
 
-      // create the info downloader for the scraper
-      CVideoInfoDownloader infoDownloader(scraper);
-
       // try adding by filename identifier
-      if (scraper->IsPython() && CFilenameAttributes(itemTitle, nullptr).HasIdentifier())
+      if (!scraper->IsLocalOnly() && CFilenameAttributes(itemTitle, nullptr).HasIdentifier())
       {
         CFileItemList items;
         items.Add(m_item);
@@ -415,16 +415,23 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       }
 
       // try to find a matching item
-      MOVIELIST itemResultList;
+      std::vector<CScraperUrl> itemResultList;
       const bool useTagTitle{useEmbeddedTitle && !ignoreNfo && !embeddedTitle.empty()};
-      int result = infoDownloader.FindMovie(useTagTitle ? embeddedTitle : itemTitle,
-                                            useTagTitle ? embeddedYear : -1, itemResultList,
-                                            GetProgressDialog());
+      bool searched{true};
+      try
+      {
+        itemResultList = scraper->FindMovie(useTagTitle ? embeddedTitle : itemTitle,
+                                            useTagTitle ? embeddedYear : -1);
+      }
+      catch (const CScraperError&)
+      {
+        searched = false;
+      }
 
       // close the progress dialog
       MarkFinished();
 
-      if (result > 0)
+      if (searched)
       {
         // there are multiple matches for the item
         if (!itemResultList.empty())
@@ -473,7 +480,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
                     scraperUrl.GetTitle(), scraperUrl.GetFirstThumbUrl());
         }
       }
-      else if (result < 0 || !VIDEO::CVideoInfoScanner::DownloadFailed(GetProgressDialog()))
+      else if (!VIDEO::CVideoInfoScanner::DownloadFailed(GetProgressDialog()))
       {
         failure = true;
         break;
@@ -518,8 +525,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       SetProgress(0);
 
       CVideoInfoTag details;
-      if (!CVideoInfoDownloader(scraper).GetDetails(uniqueIDs, scraperUrl, details,
-                                                    GetProgressDialog()))
+      if (!scraper->GetVideoDetails(uniqueIDs, scraperUrl, true /*fMovie*/, details))
       {
         // A scraper that can't look the movie up by its ids is searched for it as before
         if (!uniqueIDs.empty())
