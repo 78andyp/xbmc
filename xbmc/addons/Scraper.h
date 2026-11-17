@@ -108,6 +108,12 @@ public:
   bool RequiresSettings() const { return m_requiressettings; }
   bool Supports(ContentType content) const;
 
+  /*! \brief Whether Kodi runs every scraper an add-on provides. Kodi runs python scrapers only,
+   and "Local information only", which has no library as there is nothing to run. The library is
+   read from the extension, as an add-on a repository lists has no library path.
+   */
+  static bool IsSupported(const CAddonInfo& info);
+
   bool IsInUse() const override;
 
   bool IsNoop();
