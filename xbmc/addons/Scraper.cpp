@@ -232,25 +232,39 @@ bool CScraper::IsInUse() const
   return false;
 }
 
-bool CScraper::IsLocalOnly() const
+bool CScraper::IsLocalInformationOnly() const
 {
   return ID() == LOCAL_SCRAPER_ID;
 }
+
+namespace
+{
+//! Run a scraper's script for a listing. Local information only has no script, and lists nothing.
+bool RunForListing(const CScraper& scraper, const std::string& url, CFileItemList& items)
+{
+  if (scraper.IsLocalInformationOnly())
+    return true;
+  return CDirectory::GetDirectory(url, items, "", DIR_FLAG_DEFAULTS);
+}
+
+//! Run a scraper's script for one result. Local information only has no script, and gives none.
+bool RunForResult(const CScraper& scraper, const std::string& url, CFileItem& item)
+{
+  return !scraper.IsLocalInformationOnly() && CPluginDirectory::GetPluginResult(url, item, false);
+}
+} // unnamed namespace
 
 // pass in contents of .nfo file; returns URL (possibly empty if none found)
 CScraperUrl CScraper::NfoUrl(const std::string &sNfoContent)
 {
   CScraperUrl scurlRet;
 
-  if (IsLocalOnly())
-    return scurlRet;
-
   std::stringstream str;
   str << "plugin://" << ID() << "?action=NfoUrl&nfo=" << CURL::Encode(sNfoContent)
       << "&pathSettings=" << CURL::Encode(GetPathSettingsAsJSON());
 
   CFileItemList items;
-  if (!XFILE::CDirectory::GetDirectory(str.str(), items, "", DIR_FLAG_DEFAULTS))
+  if (!RunForListing(*this, str.str(), items))
     return scurlRet;
 
   if (items.IsEmpty())
@@ -265,8 +279,6 @@ CScraperUrl CScraper::NfoUrl(const std::string &sNfoContent)
 CScraperUrl CScraper::ResolveIDToUrl(const std::string &externalID)
 {
   CScraperUrl scurlRet;
-  if (IsLocalOnly())
-    return scurlRet;
 
   std::stringstream str;
   str << "plugin://" << ID() << "?action=resolveid&key=" << CURL::Encode(externalID)
@@ -274,7 +286,7 @@ CScraperUrl CScraper::ResolveIDToUrl(const std::string &externalID)
 
   CFileItem item("resolve me", false);
 
-  if (XFILE::CPluginDirectory::GetPluginResult(str.str(), item, false))
+  if (RunForResult(*this, str.str(), item))
     scurlRet.ParseFromData(item.GetDynPath());
 
   return scurlRet;
@@ -363,17 +375,17 @@ CMusicArtistInfo FromFileItem<CMusicArtistInfo>(const CFileItem &item)
  \return false if the search failed: the scraper said so, or ended without a listing
  */
 template<class T>
-bool PythonFind(const std::string& ID,
+bool PythonFind(const CScraper& scraper,
                 const std::map<std::string, std::string, std::less<>>& additionals,
                 std::vector<T>& result)
 {
   CFileItemList items;
   std::stringstream str;
-  str << "plugin://" << ID << "?action=find";
+  str << "plugin://" << scraper.ID() << "?action=find";
   for (const auto& [first, second] : additionals)
     str << "&" << first << "=" << CURL::Encode(second);
 
-  if (!XFILE::CDirectory::GetDirectory(str.str(), items, "", DIR_FLAG_DEFAULTS))
+  if (!RunForListing(scraper, str.str(), items))
     return false;
 
   for (const auto& it : items)
@@ -561,7 +573,7 @@ bool DetailsFromFileItem<CVideoInfoTag>(const CFileItem& item, CVideoInfoTag& ta
 }
 
 template<class T>
-bool PythonDetails(const std::string& ID,
+bool PythonDetails(const CScraper& scraper,
                    const std::string& key,
                    const std::string& url,
                    const std::string& action,
@@ -575,21 +587,22 @@ bool PythonDetails(const std::string& ID,
   std::string uids;
   CJSONVariantWriter::Write(ids, uids, true);
   std::stringstream str;
-  str << "plugin://" << ID << "?action=" << action << "&" << key << "=" << CURL::Encode(url);
+  str << "plugin://" << scraper.ID() << "?action=" << action << "&" << key << "="
+      << CURL::Encode(url);
   str << "&pathSettings=" << CURL::Encode(pathSettings);
   if (!uniqueIDs.empty())
     str << "&uniqueIDs=" << CURL::Encode(uids);
 
   CFileItem item(url, false);
 
-  if (!XFILE::CPluginDirectory::GetPluginResult(str.str(), item, false))
+  if (!RunForResult(scraper, str.str(), item))
     return false;
 
   return DetailsFromFileItem(item, result);
 }
 
 template<class T>
-bool PythonDetails(const std::string& ID,
+bool PythonDetails(const CScraper& scraper,
                    const std::string& key,
                    const std::string& url,
                    const std::string& action,
@@ -597,7 +610,7 @@ bool PythonDetails(const std::string& ID,
                    T& result)
 {
   const ADDON::CScraper::UniqueIDs ids;
-  return PythonDetails(ID, key, url, action, pathSettings, ids, result);
+  return PythonDetails(scraper, key, url, action, pathSettings, ids, result);
 }
 //! \brief Length prefixed, so that no separator can appear in what it is separating
 std::string Keyed(std::string_view value)
@@ -620,9 +633,6 @@ std::string SerialiseUniqueIDs(const ADDON::CScraper::UniqueIDs& uniqueIDs)
 
 std::vector<CScraperUrl> CScraper::FindMovie(const std::string& movieTitle, int movieYear)
 {
-  if (IsLocalOnly())
-    return {};
-
   // The title is cleaned below, so the arguments as given identify the search
   const std::string key{StringUtils::Format("{}\n{}", movieTitle, movieYear)};
   if (const auto it = m_findCache.find(key); it != m_findCache.end())
@@ -673,7 +683,7 @@ std::vector<CScraperUrl> CScraper::FindMovieUncached(const std::string& movieTit
   if (!sYear.empty())
     additionals.try_emplace("year", sYear);
   additionals.try_emplace("pathSettings", GetPathSettingsAsJSON());
-  if (!PythonFind(ID(), additionals, vcscurl))
+  if (!PythonFind(*this, additionals, vcscurl))
   {
     CLog::LogF(LOGDEBUG, "Search for '{}' using {} scraper failed", sTitle, Name());
     throw CScraperError();
@@ -689,11 +699,8 @@ std::vector<CMusicAlbumInfo> CScraper::FindAlbum(const std::string& sAlbum,
              sArtist, sAlbum, Name(), Path(), Content(), Version().asString());
 
   std::vector<CMusicAlbumInfo> vcali;
-  if (IsLocalOnly())
-    return vcali;
-
   // A failed search finds nothing here, as the music scanner doesn't catch an error
-  PythonFind(ID(),
+  PythonFind(*this,
              {{"title", sAlbum}, {"artist", sArtist}, {"pathSettings", GetPathSettingsAsJSON()}},
              vcali);
   return vcali;
@@ -706,11 +713,8 @@ std::vector<CMusicArtistInfo> CScraper::FindArtist(const std::string& sArtist)
              sArtist, Name(), Path(), Content(), Version().asString());
 
   std::vector<CMusicArtistInfo> vcari;
-  if (IsLocalOnly())
-    return vcari;
-
   // A failed search finds nothing here, as the music scanner doesn't catch an error
-  PythonFind(ID(), {{"artist", sArtist}, {"pathSettings", GetPathSettingsAsJSON()}}, vcari);
+  PythonFind(*this, {{"artist", sArtist}, {"pathSettings", GetPathSettingsAsJSON()}}, vcari);
   return vcari;
 }
 
@@ -718,7 +722,7 @@ std::vector<CMusicArtistInfo> CScraper::FindArtist(const std::string& sArtist)
 VIDEO::EPISODELIST CScraper::GetEpisodeList(const CScraperUrl& scurl)
 {
   VIDEO::EPISODELIST vcep;
-  if (!scurl.HasUrls() || IsLocalOnly())
+  if (!scurl.HasUrls())
     return vcep;
 
   CLog::LogF(LOGDEBUG, "Searching '{}' using {} scraper (file: '{}', content: '{}', version: '{}')",
@@ -730,7 +734,7 @@ VIDEO::EPISODELIST CScraper::GetEpisodeList(const CScraperUrl& scurl)
       << "&pathSettings=" << CURL::Encode(GetPathSettingsAsJSON());
 
   CFileItemList items;
-  if (!XFILE::CDirectory::GetDirectory(str.str(), items, "", DIR_FLAG_DEFAULTS))
+  if (!RunForListing(*this, str.str(), items))
     return vcep;
 
   vcep.reserve(items.Size());
@@ -755,9 +759,6 @@ bool CScraper::GetVideoDetails(const UniqueIDs& uniqueIDs,
                                bool fMovie /*else episode*/,
                                CVideoInfoTag& video)
 {
-  if (IsLocalOnly())
-    return false;
-
   const std::string key{Keyed(scurl.GetFirstThumbUrl()) + (fMovie ? "m" : "e") +
                         SerialiseUniqueIDs(uniqueIDs)};
   if (const auto it = m_detailsCache.find(key); it != m_detailsCache.end())
@@ -789,7 +790,7 @@ bool CScraper::GetVideoDetailsUncached(const UniqueIDs& uniqueIDs,
 
   video.Reset();
 
-  const bool fRet{PythonDetails(ID(), "url", scurl.GetFirstThumbUrl(),
+  const bool fRet{PythonDetails(*this, "url", scurl.GetFirstThumbUrl(),
                                 fMovie ? "getdetails" : "getepisodedetails",
                                 GetPathSettingsAsJSON(), uniqueIDs, video)};
 
@@ -801,38 +802,35 @@ bool CScraper::GetVideoDetailsUncached(const UniqueIDs& uniqueIDs,
 // takes a URL; returns true and populates album on success, false otherwise
 bool CScraper::GetAlbumDetails(const CScraperUrl& scurl, CAlbum& album)
 {
-  if (IsLocalOnly())
-    return false;
-
   CLog::LogF(LOGDEBUG, "Reading '{}' using {} scraper (file: '{}', content: '{}', version: '{}')",
              scurl.GetFirstThumbUrl(), Name(), Path(), Content(), Version().asString());
 
-  return PythonDetails(ID(), "url", scurl.GetFirstThumbUrl(), "getdetails", GetPathSettingsAsJSON(),
-                       album);
+  return PythonDetails(*this, "url", scurl.GetFirstThumbUrl(), "getdetails",
+                       GetPathSettingsAsJSON(), album);
 }
 
 bool CScraper::GetArtistDetails(const CScraperUrl& scurl, CArtist& artist)
 {
-  if (!scurl.HasUrls() || IsLocalOnly())
+  if (!scurl.HasUrls())
     return false;
 
   CLog::LogF(LOGDEBUG, "Reading '{}' using {} scraper (file: '{}', content: '{}', version: '{}')",
              scurl.GetFirstThumbUrl(), Name(), Path(), Content(), Version().asString());
 
-  return PythonDetails(ID(), "url", scurl.GetFirstThumbUrl(), "getdetails", GetPathSettingsAsJSON(),
-                       artist);
+  return PythonDetails(*this, "url", scurl.GetFirstThumbUrl(), "getdetails",
+                       GetPathSettingsAsJSON(), artist);
 }
 
 bool CScraper::GetArtwork(CVideoInfoTag& details)
 {
-  if (!details.HasUniqueID() || IsLocalOnly())
+  if (!details.HasUniqueID())
     return false;
 
   CLog::LogF(LOGDEBUG,
              "Reading artwork for '{}' using {} scraper (file: '{}', content: '{}', version: '{}')",
              details.GetUniqueID(), Name(), Path(), Content(), Version().asString());
 
-  return PythonDetails(ID(), "id", details.GetUniqueID(), "getartwork", GetPathSettingsAsJSON(),
+  return PythonDetails(*this, "id", details.GetUniqueID(), "getartwork", GetPathSettingsAsJSON(),
                        details);
 }
 } // namespace ADDON
