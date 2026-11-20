@@ -273,7 +273,7 @@ TEST(TestScraper, LocalInformationOnlyLooksNothingUp)
   CArtist artist;
 
   EXPECT_TRUE(scraper->LibPath().empty());
-  EXPECT_TRUE(scraper->IsLocalOnly());
+  EXPECT_TRUE(scraper->IsLocalInformationOnly());
   EXPECT_FALSE(scraper->NfoUrl("https://www.themoviedb.org/movie/1").HasUrls());
   EXPECT_TRUE(scraper->FindMovie("Film", 2001).empty());
   EXPECT_FALSE(scraper->GetVideoDetails({{"tmdb", "1"}}, url, true, details));

@@ -2037,7 +2037,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
           showInfo.m_strPictureURL = tag.m_strPictureURL; // We only want artwork
         }
         const CVideoInfoScannerArt::UseRemoteArtWithLocalScraper useRemoteArt{
-            scraper->IsLocalOnly() && m_advancedSettings->m_bNoRemoteArtWithLocalScraper
+            scraper->IsLocalInformationOnly() && m_advancedSettings->m_bNoRemoteArtWithLocalScraper
                 ? CVideoInfoScannerArt::UseRemoteArtWithLocalScraper::NO
                 : CVideoInfoScannerArt::UseRemoteArtWithLocalScraper::YES};
         CVideoInfoScannerArt::GetSeasonThumbs(
@@ -2385,7 +2385,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
 
     const ContentType content{
         !scraper || contentOverride != ContentType::NONE ? contentOverride : scraper->Content()};
-    const bool usingLocalScraper{!scraper || scraper->IsLocalOnly()};
+    const bool usingLocalScraper{!scraper || scraper->IsLocalInformationOnly()};
     const CVideoInfoScannerArt::UseRemoteArtWithLocalScraper useRemoteArt{
         usingLocalScraper && m_advancedSettings->m_bNoRemoteArtWithLocalScraper
             ? CVideoInfoScannerArt::UseRemoteArtWithLocalScraper::NO
@@ -2948,7 +2948,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
       if (!hasEpisodeGuide)
       {
         // fetch episode guide
-        if (!showInfo.m_strEpisodeGuide.empty() && !scraper->IsLocalOnly())
+        if (!showInfo.m_strEpisodeGuide.empty() && !scraper->IsLocalInformationOnly())
         {
           CScraperUrl url;
           url.ParseAndAppendUrlsFromEpisodeGuide(showInfo.m_strEpisodeGuide);

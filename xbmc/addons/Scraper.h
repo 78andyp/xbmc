@@ -90,7 +90,7 @@ public:
 
   bool IsInUse() const override;
 
-  bool IsLocalOnly() const;
+  bool IsLocalInformationOnly() const;
 
   // scraper media functions
   CScraperUrl NfoUrl(const std::string &sNfoContent);

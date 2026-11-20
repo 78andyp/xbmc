@@ -305,7 +305,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
           tag->SetResumePoint(CBookmark());
 
         if (nfoResult == CInfoScanner::InfoType::FULL && m_item->IsPlugin() &&
-            scraper->IsLocalOnly())
+            scraper->IsLocalInformationOnly())
         {
           // get video info and art from plugin source with metadata.local scraper
           if (scraper->Content() == ADDON::ContentType::TVSHOWS && !m_item->IsFolder() &&
@@ -350,7 +350,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       // the scraper failed on is ignored anyway. Without an nfo the answer still covers episode
       // nfos and season art, an nfo the lookup above can miss (folder items, or parent_name
       // differing from parent_name_root) and local art.
-      if (needsRefresh && IsModal() && !scraper->IsLocalOnly() &&
+      if (needsRefresh && IsModal() && !scraper->IsLocalInformationOnly() &&
           nfoResult != CInfoScanner::InfoType::ERROR_NFO &&
           (nfoResult != CInfoScanner::InfoType::NONE ||
            scraper->Content() == ADDON::ContentType::TVSHOWS || VIDEO::IsBrowsableFolder(*m_item) ||
@@ -382,8 +382,8 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
     // it already has, as a search by its title may find another or nothing
     CScraper::UniqueIDs uniqueIDs;
     if (lookUpByIds && !hasDetails && !IsModal() && m_searchTitle.empty() &&
-        !scraper->IsLocalOnly() && (scraper->Content() == ADDON::ContentType::MOVIES || isTvShow) &&
-        m_item->HasVideoInfoTag())
+        !scraper->IsLocalInformationOnly() &&
+        (scraper->Content() == ADDON::ContentType::MOVIES || isTvShow) && m_item->HasVideoInfoTag())
     {
       for (const auto& [type, value] : m_item->GetVideoInfoTag()->GetUniqueIDs())
       {
@@ -400,7 +400,8 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       SetProgress(0);
 
       // try adding by filename identifier
-      if (!scraper->IsLocalOnly() && CFilenameAttributes(itemTitle, nullptr).HasIdentifier())
+      if (!scraper->IsLocalInformationOnly() &&
+          CFilenameAttributes(itemTitle, nullptr).HasIdentifier())
       {
         CFileItemList items;
         items.Add(m_item);
@@ -493,7 +494,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
     {
       // a local scraper has nothing to search, so another title cannot help and asking for one
       // would only bring us back here
-      if (IsModal() && !scraper->IsLocalOnly())
+      if (IsModal() && !scraper->IsLocalInformationOnly())
       {
         // ask the user to input a title to use
         if (!CGUIKeyboardFactory::ShowAndGetInput(
