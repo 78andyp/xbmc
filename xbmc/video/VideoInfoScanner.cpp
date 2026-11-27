@@ -374,6 +374,129 @@ CVideoInfoScanner::~CVideoInfoScanner()
     m_bStop = true;
   }
 
+  CVideoInfoScanner::ShowSearch CVideoInfoScanner::FindShowFolders(
+      const std::string& folder,
+      std::vector<std::string>& shows,
+      std::vector<std::string>& groupings)
+  {
+    // Folders, and the nfo files a show folder is recognised by
+    CFileItemList items;
+    if (!CDirectory::GetDirectory(folder, items, ".nfo",
+                                  DIR_FLAG_NO_FILE_DIRS | DIR_FLAG_NO_FILE_INFO))
+      return ShowSearch::FAILED;
+
+    const auto seasonFolder{KODI::REGEXP::GetRegExp("^(?:season[ ._-]*[0-9]+|specials)$",
+                                                    &m_regexpCache, true, CRegExp::autoUtf8)};
+    std::vector<std::string> subfolders;
+    for (const auto& item : items)
+    {
+      const std::string name{URIUtils::GetFileOrFolderName(item->GetPath())};
+      if (item->IsFolder() ? seasonFolder && seasonFolder->RegFind(name) >= 0
+                           : StringUtils::EqualsNoCase(name, "tvshow.nfo"))
+      {
+        shows.emplace_back(folder);
+        return ShowSearch::FOUND;
+      }
+      if (item->IsFolder() && !URIUtils::IsDiscPath(item->GetPath()) &&
+          !CUtil::ExcludeFileOrFolder(
+              item->GetPath(), m_advancedSettings->m_tvshowExcludeFromScanRegExps, &m_regexpCache))
+        subfolders.emplace_back(item->GetPath());
+    }
+
+    std::vector<std::string> found;
+    std::vector<std::string> others;
+    bool failed{false};
+    for (const auto& subfolder : subfolders)
+    {
+      switch (FindShowFolders(subfolder, found, groupings))
+      {
+        case ShowSearch::NONE:
+          others.emplace_back(subfolder);
+          break;
+        case ShowSearch::FAILED:
+          failed = true;
+          break;
+        case ShowSearch::FOUND:
+          break;
+      }
+    }
+    if (found.empty())
+      return failed ? ShowSearch::FAILED : ShowSearch::NONE;
+
+    CLog::Log(LOGDEBUG, "VideoInfoScanner: '{}' groups tv shows", CURL::GetRedacted(folder));
+    groupings.emplace_back(folder);
+    // The shows below a folder that couldn't be listed are missed, and must not be cleaned
+    if (failed)
+      m_bClean = false;
+    if (!HasNoMedia(folder))
+    {
+      shows.insert(shows.end(), found.begin(), found.end());
+      shows.insert(shows.end(), others.begin(), others.end());
+    }
+    return ShowSearch::FOUND;
+  }
+
+  void CVideoInfoScanner::FindTvShowFolders(const std::string& directory, CFileItemList& items)
+  {
+    if (URIUtils::IsPlugin(directory))
+      return;
+
+    std::vector<std::string> shows;
+    std::vector<std::string> groupings;
+    for (int i = items.Size() - 1; i >= 0; --i)
+    {
+      const CFileItemPtr item{items[i]};
+      if (!item->IsFolder())
+        continue;
+
+      std::vector<std::string> folders;
+      const ShowSearch search{FindShowFolders(item->GetPath(), folders, groupings)};
+      if (search == ShowSearch::FAILED)
+        continue;
+      if (search == ShowSearch::NONE || (folders.size() == 1 && folders[0] == item->GetPath()))
+      {
+        shows.emplace_back(item->GetPath());
+        continue;
+      }
+
+      items.Remove(i);
+      for (const auto& folder : folders)
+      {
+        const auto show{std::make_shared<CFileItem>(folder, true)};
+        show->SetLabel(URIUtils::GetFileOrFolderName(folder));
+        items.Add(show);
+      }
+      shows.insert(shows.end(), folders.begin(), folders.end());
+    }
+
+    // A show of the library's whose folder now groups shows, or is inside another show, is
+    // removed, so that its episodes are added to the shows found. One whose folder is gone is left
+    // to the clean.
+    std::vector<std::pair<int, std::string>> linked;
+    m_database.GetTvShowsLinkedBelow(directory, linked);
+    std::set<int> removed;
+    for (const auto& [idShow, path] : linked)
+    {
+      if (removed.contains(idShow))
+        continue;
+      if (std::ranges::none_of(groupings, [&path](const std::string& grouping)
+                               { return URIUtils::PathEquals(path, grouping); }) &&
+          (std::ranges::none_of(shows,
+                                [&path](const std::string& show)
+                                {
+                                  return URIUtils::PathHasParent(path, show) &&
+                                         !URIUtils::PathEquals(path, show);
+                                }) ||
+           !CDirectory::Exists(path)))
+        continue;
+
+      CLog::Log(LOGINFO, "VideoInfoScanner: Removing tv show {}, as '{}' isn't a show's folder",
+                idShow, CURL::GetRedacted(path));
+      m_database.DeleteTvShow(idShow);
+      removed.insert(idShow);
+    }
+  }
+
   std::pair<CInfoScanner::ScanComplete, CInfoScanner::ContentFound> CVideoInfoScanner::DoScan(
       const std::string& strDirectory)
   {
@@ -584,6 +707,9 @@ CVideoInfoScanner::~CVideoInfoScanner()
           bSkip = false;
         else
           items.Clear();
+
+        if (!bSkip)
+          FindTvShowFolders(strDirectory, items);
       }
       else
       {
@@ -592,6 +718,10 @@ CVideoInfoScanner::~CVideoInfoScanner()
         item->SetFolder(true);
         items.Add(item);
         items.SetPath(URIUtils::GetParentPath(item->GetPath()));
+
+        // A folder below a source's root may group shows. A single show source's root is its show.
+        if (!foundDirectly)
+          FindTvShowFolders(strDirectory, items);
       }
     }
 

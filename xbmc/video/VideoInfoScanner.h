@@ -469,6 +469,34 @@ typedef struct SScanSettings
                                        std::string_view directory,
                                        std::function<void(const std::string&)> f);
 
+    enum class ShowSearch
+    {
+      NONE, //!< Neither the folder nor one below it is recognised as a show's
+      FOUND, //!< The folder is a show's, or groups the shows found
+      FAILED //!< The folder, or one below it, couldn't be listed
+    };
+
+    /*!
+     * \brief Find the shows at or below a folder of a tv show source. A folder holding a season
+     *        folder ("Season 1", "Specials") or a tvshow.nfo is a show's. A folder above one groups
+     *        shows, and its other folders are shows' too.
+     * \param[in] folder The folder
+     * \param[out] shows The show folders found
+     * \param[out] groupings The grouping folders found
+     * \return Whether shows were found
+     */
+    ShowSearch FindShowFolders(const std::string& folder,
+                               std::vector<std::string>& shows,
+                               std::vector<std::string>& groupings);
+
+    /*!
+     * \brief Replace each folder of a tv show source's listing that groups shows with the shows
+     *        below it, and remove from the library the shows of folders that aren't a show's
+     * \param[in] directory The folder listed
+     * \param[in,out] items Its listing, each folder of which is taken for a show's
+     */
+    void FindTvShowFolders(const std::string& directory, CFileItemList& items);
+
     /*!
      * \brief Look for the name of an edition known to the library (ex. "Director's Cut") within the
      *        name of the folder holding a disc. The longest match wins, and a match at the very

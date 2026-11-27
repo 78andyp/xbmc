@@ -899,6 +899,14 @@ public:
    */
   bool GetPathsLinkedToTvShow(int idShow, std::vector<std::string> &paths);
 
+  /*! \brief return the tvshows linked to a path at or below a folder.
+   \param basepath the folder.
+   \param shows [out] the id of each show and the path it is linked to.
+   \return true on success, false on failure.
+   */
+  bool GetTvShowsLinkedBelow(const std::string& basepath,
+                             std::vector<std::pair<int, std::string>>& shows);
+
   /*! \brief retrieve subpaths of a given path.  Assumes a hierarchical folder structure
    \param basepath the root path to retrieve subpaths for
    \param subpaths the returned subpaths

@@ -2133,6 +2133,23 @@ protected:
   int CountShows() { return m_db.GetSingleValueInt("SELECT COUNT(*) FROM tvshow"); }
   int CountEpisodes() { return m_db.GetSingleValueInt("SELECT COUNT(*) FROM episode"); }
 
+  //! The show the folder is the folder of, or 0
+  int ShowAt(const std::string& folder)
+  {
+    return m_db.GetSingleValueInt(m_db.PrepareSQL(
+        "SELECT idShow FROM tvshowlinkpath JOIN path ON path.idPath = tvshowlinkpath.idPath "
+        "WHERE strPath='%s'",
+        folder.c_str()));
+  }
+
+  //! The show the file's episode is in, or 0
+  int ShowOf(const std::string& file)
+  {
+    return m_db.GetSingleValueInt(
+        m_db.PrepareSQL("SELECT idShow FROM episode_view WHERE strPath='%s' AND strFileName='%s'",
+                        URIUtils::GetDirectory(file).c_str(), URIUtils::GetFileName(file).c_str()));
+  }
+
   const bool m_extractThumb{Settings()->GetBool(CSettings::SETTING_MYVIDEOS_EXTRACTTHUMB)};
   bool m_textureCache{false};
   std::shared_ptr<CJobManager> m_previousJobManager;
@@ -2439,4 +2456,168 @@ TEST_F(TestVideoInfoScannerTvShows, AnExistingShowKeepsItsScraperWhenItsNfoNames
 
   EXPECT_GT(m_db.GetEpisodeId(second, 2, 1), 0);
   EXPECT_EQ(2, CountEpisodes());
+}
+
+// A show is recognised by a season folder, and the folders above it only group shows: here a
+// category and a franchise. The other folders of a grouping folder are shows too.
+TEST_F(TestVideoInfoScannerTvShows, TheShowsInAGroupingFolderAreShowsOfTheirOwn)
+{
+  UseTestScraper();
+  for (const std::string title : {"Dragon Ball", "Dragon Ball Super", "Dragon Ball Z Kai"})
+  {
+    Found(title);
+    Details(title, "<details><title>" + title + "</title></details>");
+  }
+  const std::string franchise{Folder(Folder(m_root, "Animation"), "Dragon Ball")};
+  const std::string original{Folder(franchise, "Dragon Ball")};
+  const std::string first{Episode(Folder(original, "Season 2"), "Dragon.Ball.S02E01.mkv")};
+  const std::string super{Folder(franchise, "Dragon Ball Super")};
+  const std::string second{Episode(super, "Dragon.Ball.Super.S01E01.mkv")};
+  const std::string kai{Folder(franchise, "Dragon Ball Z Kai")};
+  const std::string third{Episode(kai, "Dragon.Ball.Z.Kai.S01E01.mkv")};
+
+  Scan();
+
+  EXPECT_EQ(3, CountShows());
+  EXPECT_GT(ShowAt(original), 0);
+  EXPECT_EQ(ShowAt(original), ShowOf(first));
+  EXPECT_GT(ShowAt(super), 0);
+  EXPECT_EQ(ShowAt(super), ShowOf(second));
+  EXPECT_GT(ShowAt(kai), 0);
+  EXPECT_EQ(ShowAt(kai), ShowOf(third));
+}
+
+TEST_F(TestVideoInfoScannerTvShows, AShowIsRecognisedByItsNfo)
+{
+  const std::string franchise{Folder(m_root, "Stargate")};
+  const std::string sg1{Folder(franchise, "Stargate SG-1")};
+  File(sg1, "tvshow.nfo", "<tvshow><title>Stargate SG-1</title></tvshow>");
+  const std::string first{Episode(sg1, "Stargate.SG-1.S01E01.mkv")};
+  const std::string atlantis{Folder(franchise, "Stargate Atlantis")};
+  File(atlantis, "tvshow.nfo", "<tvshow><title>Stargate Atlantis</title></tvshow>");
+  const std::string second{Episode(atlantis, "Stargate.Atlantis.S01E01.mkv")};
+
+  Scan();
+
+  EXPECT_EQ(2, CountShows());
+  EXPECT_GT(ShowAt(sg1), 0);
+  EXPECT_EQ(ShowAt(sg1), ShowOf(first));
+  EXPECT_GT(ShowAt(atlantis), 0);
+  EXPECT_EQ(ShowAt(atlantis), ShowOf(second));
+}
+
+// Without a season folder or tvshow.nfo below it, a folder of the source's is a show whatever its
+// folders are named, as it always was
+TEST_F(TestVideoInfoScannerTvShows, AShowWithoutSeasonFoldersIsOneShow)
+{
+  UseTestScraper();
+  Found("Show");
+  Details("Show", "<details><title>Show</title></details>");
+  const std::string show{Folder(m_root, "Show")};
+  const std::string first{Episode(Folder(show, "Series 1"), "Show S01E01.mkv")};
+  const std::string second{Episode(Folder(show, "Series 2"), "Show S02E01.mkv")};
+  BlurayRip(Folder(show, "Show.S03E01"));
+
+  Scan();
+
+  EXPECT_EQ(1, CountShows());
+  EXPECT_GT(ShowAt(show), 0);
+  EXPECT_EQ(ShowAt(show), ShowOf(first));
+  EXPECT_EQ(ShowAt(show), ShowOf(second));
+}
+
+TEST_F(TestVideoInfoScannerTvShows, ANoMediaFileHidesTheShowsItsFolderGroups)
+{
+  const std::string category{Folder(m_root, "Animation")};
+  File(category, ".nomedia");
+  const std::string show{Folder(category, "Show")};
+  File(show, "tvshow.nfo", "<tvshow><title>Show</title></tvshow>");
+  Episode(show, "Show S01E01.mkv");
+
+  Scan();
+
+  EXPECT_EQ(0, CountShows());
+}
+
+// The library ends up as a first scan of the folders would leave it. A show added for a folder that
+// now groups shows is replaced by them, keeping the play counts of its files.
+TEST_F(TestVideoInfoScannerTvShows, AShowWhoseFolderNowGroupsShowsIsReplacedByThem)
+{
+  UseTestScraper();
+  for (const std::string title : {"Animation", "Dragon Ball", "Dragon Ball Super"})
+  {
+    Found(title);
+    Details(title, "<details><title>" + title + "</title></details>");
+  }
+  const std::string category{Folder(m_root, "Animation")};
+  const std::string super{Folder(category, "Dragon Ball Super")};
+  const std::string first{Episode(super, "Dragon.Ball.Super.S01E01.mkv")};
+  Scan();
+  ASSERT_EQ(1, CountShows());
+  ASSERT_GT(ShowAt(category), 0);
+  m_db.SetPlayCount(CFileItem{first, false}, 1);
+
+  const std::string original{Folder(category, "Dragon Ball")};
+  const std::string second{Episode(Folder(original, "Season 1"), "Dragon.Ball.S01E01.mkv")};
+  Scan();
+
+  EXPECT_EQ(2, CountShows());
+  EXPECT_EQ(0, ShowAt(category));
+  EXPECT_GT(ShowAt(super), 0);
+  EXPECT_EQ(ShowAt(super), ShowOf(first));
+  EXPECT_GT(ShowAt(original), 0);
+  EXPECT_EQ(ShowAt(original), ShowOf(second));
+  EXPECT_EQ(1, m_db.GetPlayCount(first));
+}
+
+// A show added for a folder that is now inside another show's is merged into it
+TEST_F(TestVideoInfoScannerTvShows, AShowWhoseFolderIsNowInsideAnotherShowsIsMergedIntoIt)
+{
+  const std::string show{Folder(m_root, "Show")};
+  const std::string inside{Folder(show, "Inside")};
+  File(inside, "tvshow.nfo", "<tvshow><title>Inside</title></tvshow>");
+  const std::string first{Episode(inside, "Inside S01E01.mkv")};
+  Scan();
+  ASSERT_EQ(1, CountShows());
+  ASSERT_GT(ShowAt(inside), 0);
+
+  File(show, "tvshow.nfo", "<tvshow><title>Show</title></tvshow>");
+  const std::string second{Episode(show, "Show S01E02.mkv")};
+  Scan();
+
+  EXPECT_EQ(1, CountShows());
+  EXPECT_EQ(0, ShowAt(inside));
+  EXPECT_GT(ShowAt(show), 0);
+  EXPECT_EQ(ShowAt(show), ShowOf(first));
+  EXPECT_EQ(ShowAt(show), ShowOf(second));
+}
+
+// A show moved from one grouping folder to another is found in the new one. Only the clean removes
+// it from the old one, as a folder that is gone may only be offline.
+TEST_F(TestVideoInfoScannerTvShows, AShowMovedToAnotherGroupingFolderIsCleanedFromTheOldOne)
+{
+  const std::string show{Folder(Folder(m_root, "Animation"), "Show")};
+  File(show, "tvshow.nfo", "<tvshow><title>Show</title></tvshow>");
+  const std::string episode{Episode(Folder(show, "Season 1"), "Show S01E01.mkv")};
+  Scan(false, true);
+  ASSERT_GT(ShowOf(episode), 0);
+
+  const std::string drama{Folder(m_root, "Drama")};
+  const auto path{[](std::string folder)
+                  {
+                    URIUtils::RemoveSlashAtEnd(folder);
+                    return std::filesystem::path{std::u8string{
+                        reinterpret_cast<const char8_t*>(folder.data()), folder.size()}};
+                  }};
+  std::filesystem::rename(path(show), path(URIUtils::AddFileToFolder(drama, "Show")));
+  Scan();
+  ASSERT_GT(ShowOf(episode), 0);
+
+  Scan(false, true);
+
+  const std::string moved{URIUtils::AddFileToFolder(drama, "Show", "Season 1", "Show S01E01.mkv")};
+  EXPECT_EQ(1, CountShows());
+  EXPECT_EQ(1, CountEpisodes());
+  EXPECT_GT(ShowOf(moved), 0);
+  EXPECT_EQ(0, ShowOf(episode));
 }

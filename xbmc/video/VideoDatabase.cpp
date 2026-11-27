@@ -391,6 +391,37 @@ bool CVideoDatabase::GetPathsLinkedToTvShow(int idShow, std::vector<std::string>
   return false;
 }
 
+bool CVideoDatabase::GetTvShowsLinkedBelow(const std::string& basepath,
+                                           std::vector<std::pair<int, std::string>>& shows)
+{
+  std::string sql;
+  try
+  {
+    if (!m_pDB || !m_pDS)
+      return false;
+
+    std::string path(basepath);
+    URIUtils::AddSlashAtEnd(path);
+    sql = PrepareSQL("SELECT tvshowlinkpath.idShow, path.strPath FROM tvshowlinkpath "
+                     "JOIN path ON path.idPath = tvshowlinkpath.idPath "
+                     "WHERE SUBSTR(path.strPath,1,%i)='%s'",
+                     StringUtils::utf8_strlen(path), path.c_str());
+    m_pDS->query(sql);
+    while (!m_pDS->eof())
+    {
+      shows.emplace_back(m_pDS->fv(0).get_asInt(), m_pDS->fv(1).get_asString());
+      m_pDS->next();
+    }
+    m_pDS->close();
+    return true;
+  }
+  catch (...)
+  {
+    CLog::LogF(LOGERROR, "error during query: {}", sql);
+  }
+  return false;
+}
+
 bool CVideoDatabase::GetPathsForTvShow(int idShow, std::set<int>& paths)
 {
   std::string strSQL;
